@@ -8,7 +8,10 @@
    5) 임계: 모든 데이터가 한 점으로 빨려 들어갔다가 — 대폭발 (섬광 · 충격파 · 임팩트 프레임)
    6) 재구성: 사방으로 흩어진 입자가 새 모습의 픽셀 자리로 날아와 거대한 몸을 짜 맞추고, 실제 모습이 드러나요
    7) 결과: 회전하는 디스크 플랫폼과 빛기둥 위에 새 모습 · LIMIT BREAK · 이름 · 용량 막대 · 한 글자씩 써지는 설명
-   사용: await window.evoCinematic.play({ from, to, partner, kind, label, cap, fromCap, desc, speed, alive, at })
+   단계(power 1 성숙기 · 2 완전체 · 3 궁극체 · 4 특별/초궁극)가 오를수록 화려해져요:
+     입자 수 · 복제 박자(×8 → ×256) · 흔들림 · 폭발 파동과 파편이 커지고,
+     3단계부터 번개와 회전하는 빛살, 4단계는 두 번째 폭발 · 무지개 파동 · 반짝이는 별가루까지 더해져요
+   사용: await window.evoCinematic.play({ from, to, partner, kind, label, cap, fromCap, desc, speed, alive, at, power })
    화면을 누르거나 건너뛰기 / Esc → 이름 장면으로, 한 번 더 누르면 닫혀요. */
 (function () {
   'use strict';
@@ -19,7 +22,14 @@
     implode: 7900, boom: 8500, rebuild: 8800, rebuilt: 10700, solid: 10500,
     slam: 11200, hold: 15000, end: 15700,
   };
-  const MAX_PARTS = 5200;
+  let MAX_PARTS = 5200;
+  // 단계별 세기 (index = power)
+  const POWER = {
+    parts: [0, 1500, 2800, 4400, 6400],
+    amp: [null, [4600, 5600, 6600], [4600, 5400, 6200, 7000], [4600, 5400, 6100, 6700, 7200, 7600], [4400, 5000, 5550, 6050, 6500, 6900, 7250, 7550]],
+    shake: [0, .45, .7, 1, 1.45], burst: [0, 90, 180, 300, 560], rings: [0, 2, 3, 4, 7], glow: [0, .55, .8, 1, 1.3],
+    stars: ['', '★☆☆☆', '★★☆☆', '★★★☆', '★★★★'],
+  };
   const TINT = { 'EVOLUTION': '#38bdf8', 'JOGRESS EVOLUTION': '#f472b6', 'CAPSULE EVOLUTION': '#facc15', 'SPECIAL EVOLUTION': '#a78bfa' };
   /* 진화 형태별 테마
      data    — 데이터 증폭 (기본): 네트워크 · 육각 프레임 · 디스크
@@ -135,7 +145,9 @@
   api.skip = () => { if (api._skip) api._skip(); };
   api.preload = name => cutout(window.digiImage && window.digiImage(name));
 
-  api.play = async function ({ from, to, partner = null, kind = 'EVOLUTION', label = '', attr = '', cap = '', fromCap = '', desc = '', speed = () => 1, alive = () => true, at = 0 } = {}) {
+  api.play = async function ({ from, to, partner = null, kind = 'EVOLUTION', label = '', attr = '', cap = '', fromCap = '', desc = '', speed = () => 1, alive = () => true, at = 0, power = 2 } = {}) {
+    const PW = Math.max(1, Math.min(4, power | 0)), SHK = POWER.shake[PW], GLW = POWER.glow[PW];
+    MAX_PARTS = POWER.parts[PW]; T.amp = POWER.amp[PW];
     const img = n => (n && window.digiImage) ? window.digiImage(n) : null;
     const [A, B, P] = await Promise.all([cutout(img(from)), cutout(img(to)), cutout(img(partner))]);
     if (!alive()) return;
@@ -187,7 +199,7 @@
 
     let t = at, last = performance.now(), W = 0, H = 0, dpr = 1, cols = [], burst = [], mult = 1, beatsDone = 0;
     const shakes = [], fired = new Set();
-    const shake = (amp, dur) => shakes.push({ t0: t, amp, dur });
+    const shake = (amp, dur) => shakes.push({ t0: t, amp: amp * SHK, dur });
     const once = (key, fn) => { if (!fired.has(key)) { fired.add(key); fn(); } };
     // 시작 시점을 건너뛴 경우(at, 건너뛰기) 지나간 박자의 복제를 미리 해 둬요
     const catchUp = () => { T.amp.forEach((b, i) => { if (t >= b && beatsDone <= i) { clone(b); mult *= 2; beatsDone = i + 1; fired.add('amp' + i); } }); };
@@ -342,6 +354,43 @@
       g.restore();
     }
     // 가로 데이터 줄기 (전송 중인 신호처럼 화면을 가로질러요)
+    // 번개: 구체 가장자리에서 바깥으로 지그재그
+    function lightning(x, y, r0, len, k, n) {
+      g.save(); g.globalCompositeOperation = 'lighter'; g.strokeStyle = '#ffffff'; g.shadowColor = tint; g.shadowBlur = 22 * dpr; g.lineJoin = 'round';
+      for (let b = 0; b < n; b++) {
+        if (Math.random() > .55) continue;
+        const a = Math.random() * Math.PI * 2, L = len * (.35 + Math.random() * .45), seg = 9;
+        g.globalAlpha = k * (.5 + Math.random() * .5); g.lineWidth = (1 + Math.random() * (n > 2 ? 2.6 : 1.6)) * dpr;
+        g.beginPath(); let px = x + Math.cos(a) * r0 * .8, py = y + Math.sin(a) * r0 * .8; g.moveTo(px, py);
+        for (let i = 1; i <= seg; i++) { const d = r0 * .8 + L * i / seg, j = (Math.random() - .5) * L * .12; px = x + Math.cos(a) * d - Math.sin(a) * j; py = y + Math.sin(a) * d + Math.cos(a) * j; g.lineTo(px, py); }
+        g.stroke();
+      }
+      g.restore();
+    }
+    // 회전하는 빛살 (결과 화면 뒤)
+    function godRays(x, y, len, k, rot, n) {
+      if (k <= 0) return;
+      g.save(); g.globalCompositeOperation = 'lighter'; g.translate(x, y); g.rotate(rot);
+      const gr = g.createRadialGradient(0, 0, 0, 0, 0, len); gr.addColorStop(0, tint2); gr.addColorStop(.25, tint + 'aa'); gr.addColorStop(1, tint + '00');
+      g.fillStyle = gr;
+      for (let i = 0; i < n; i++) { const a = i / n * Math.PI * 2, w = Math.PI / n * (i % 2 ? .35 : .6); g.globalAlpha = k * (i % 2 ? .6 : 1);
+        g.beginPath(); g.moveTo(0, 0); g.arc(0, 0, len, a - w, a + w); g.closePath(); g.fill(); }
+      g.restore();
+    }
+    // 반짝이는 별가루 (4단계 결과 화면)
+    function sparkles(x, y, S, k, now) {
+      if (k <= 0) return;
+      g.save(); g.globalCompositeOperation = 'lighter';
+      for (let i = 0; i < 70; i++) {
+        const a = rndS(i, 3) * Math.PI * 2, d = S * (.45 + rndS(i, 5) * 1.3), tw = Math.max(0, Math.sin(now * .004 + i * 2.3));
+        const sx = x + Math.cos(a + now * .00008) * d, sy = y + Math.sin(a + now * .00008) * d * .8, r = (2 + rndS(i, 7) * 5) * dpr * tw;
+        if (r < .5) continue;
+        g.globalAlpha = k * tw; g.fillStyle = i % 3 ? '#ffffff' : `hsl(${(i * 37 + now * .1) % 360},95%,72%)`;
+        g.beginPath(); g.moveTo(sx, sy - r * 2); g.lineTo(sx + r * .4, sy - r * .4); g.lineTo(sx + r * 2, sy); g.lineTo(sx + r * .4, sy + r * .4);
+        g.lineTo(sx, sy + r * 2); g.lineTo(sx - r * .4, sy + r * .4); g.lineTo(sx - r * 2, sy); g.lineTo(sx - r * .4, sy - r * .4); g.closePath(); g.fill();
+      }
+      g.restore();
+    }
     function streaks(k) {
       if (k <= 0) return;
       g.save(); g.globalCompositeOperation = 'lighter';
@@ -590,8 +639,9 @@
         // 박자: 흔들림 + 복제
         once('call', () => t >= T.call && shake(16, 320));
         T.amp.forEach((b, i) => { if (t >= b && beatsDone <= i) { clone(b); mult *= 2; beatsDone = i + 1; shake(6 + i * 3, 220); } });
-        once('boom', () => { if (t >= T.boom) { shake(34, 900); burst = []; for (let i = 0; i < 260; i++) { const a = Math.random() * Math.PI * 2; burst.push({ a, v: (.5 + Math.random() * 2.2) * dpr, s: (1.5 + Math.random() * 3) * dpr, life: 1 }); } } });
+        once('boom', () => { if (t >= T.boom) { shake(34, 900); burst = []; for (let i = 0; i < POWER.burst[PW]; i++) { const a = Math.random() * Math.PI * 2; burst.push({ a, v: (.5 + Math.random() * (1.4 + PW * .4)) * dpr, s: (1.5 + Math.random() * 3) * dpr, life: 1 }); } } });
         once('slamFx', () => { if (t >= T.slam) shake(22, 600); });
+        if (PW >= 4) once('boom2', () => { if (t >= T.boom + 380) { shake(30, 700); for (let i = 0; i < 260; i++) { const a = Math.random() * Math.PI * 2; burst.push({ a, v: (.8 + Math.random() * 2.6) * dpr, s: (2 + Math.random() * 3.5) * dpr, life: 1 }); } } });
         let ox = 0, oy = 0;
         for (const s of shakes) { const q = 1 - (t - s.t0) / s.dur; if (q > 0) { ox += (Math.random() - .5) * 2 * s.amp * q * dpr; oy += (Math.random() - .5) * 2 * s.amp * q * dpr; } }
         if (reduce) ox = oy = 0;
@@ -606,7 +656,7 @@
         // 배경 빛 (원형 광원)
         const rg = g.createRadialGradient(cx, cy, 0, cx, cy, S * (1.1 + ampP * 1.2));
         rg.addColorStop(0, tint + '88'); rg.addColorStop(1, tint + '00');
-        g.globalAlpha = A0 * (.3 + .6 * ampP * (1 - prog(t, T.boom, T.rebuild)) + .35 * result); g.fillStyle = rg; g.fillRect(-60, -60, W + 120, H + 120); g.globalAlpha = 1;
+        g.globalAlpha = Math.min(1, A0 * GLW * (.3 + .6 * ampP * (1 - prog(t, T.boom, T.rebuild)) + .35 * result)); g.fillStyle = rg; g.fillRect(-60, -60, W + 120, H + 120); g.globalAlpha = 1;
 
         // 16진수 데이터 열 (증폭될수록 빨라져요)
         const rainFast = 1 + 8 * ampP * (1 - prog(t, T.boom, T.rebuilt));
@@ -675,6 +725,8 @@
         themeFrame(cx, cy, Math.max(S * .7, Rbase * 1.12) * implodeK, A0 * prog(t, T.dis, T.amp[0]) * (1 - prog(t, T.implode - 100, T.boom)), t * (.0003 + ampP * .0012));
         T.amp.forEach((b, i) => { const q = prog(t, b, b + 700); if (q > 0 && q < 1) { if (themeId === 'holy') ring(cx, cy, Rbase * (1 + q * 1.6), (1 - q) * A0, 4 - q * 3, i % 2 ? '#ffffff' : tint); else hexRing(cx, cy, Rbase * (1 + q * 1.6), (1 - q) * A0, 4 - q * 3, i * .3, i % 2 ? tint2 : tint); } });
 
+        // 3단계부터: 구체에서 화면 끝으로 번개가 튀어요 (4단계는 더 자주, 더 굵게)
+        if (PW >= 3) { const lk = A0 * ampP * (1 - prog(t, T.implode, T.boom)); if (lk > 0) lightning(cx, cy, Rbase, M, lk, PW === 4 ? 4 : 2); }
         /* 4~6) 입자: 분해 → 소용돌이 구체 → 증폭 → 응축 → 대폭발 → 새 모습으로 재조립 */
         const boomK = easeOut(prog(t, T.boom, T.boom + 650));
         const settle = lerp(1.32, 1, easeOut(prog(t, T.rebuilt - 600, T.slam + 300)));
@@ -771,9 +823,9 @@
           g.globalAlpha = A0; g.fillStyle = og; g.beginPath(); g.arc(cx, cy, r * 2, 0, Math.PI * 2); g.fill(); g.globalAlpha = 1;
         }
         if (t >= T.boom) {
-          for (let i = 0; i < 4; i++) {
-            const q = prog(t, T.boom + i * 140, T.boom + 1100 + i * 140), r = M * .9 * easeOut(q), a = (1 - q) * .9 * fadeOut;
-            if (i % 2) hexRing(cx, cy, r, a, 6 - i, i * .2, '#ffffff'); else ring(cx, cy, r, a, 6 - i);
+          for (let i = 0, nr = POWER.rings[PW]; i < nr; i++) {
+            const q = prog(t, T.boom + i * 120, T.boom + 1100 + i * 120), r = M * .9 * easeOut(q), a = (1 - q) * .9 * fadeOut, w = Math.max(1.5, 7 - i * .8);
+            if (i % 2) hexRing(cx, cy, r, a, w, i * .2, '#ffffff'); else ring(cx, cy, r, a, w, PW >= 4 ? `hsl(${(i * 52 + t * .2) % 360},95%,70%)` : tint);
           }
           g.save(); g.globalCompositeOperation = 'lighter';
           for (const b of burst) {
@@ -792,6 +844,7 @@
         const footY = by + sprS * .47;
         if (t >= T.rebuild) {
           const dk = A0 * result;
+          if (PW >= 3) godRays(cx, by, M * .75, dk * (PW === 4 ? .26 : .17), t * (PW === 4 ? .00018 : .0001), PW === 4 ? 24 : 14);
           pillar(cx, footY, Math.min(W * .5, S * 1.1), dk * .8);
           disk(cx, footY, Math.min(W * .46, S * 1.5), dk, t * .0006);
           if (themeId === 'holy') sacredCircle(cx, by, sprS * .62, dk * .45, t * .00025);
@@ -812,9 +865,12 @@
         else if (t >= T.boom + 70 && t < T.boom + 150) { g.fillStyle = themeId === 'virus' ? '#3b0014' : '#fff'; g.fillRect(-60, -60, W + 120, H + 120); sprite(B, cx, cy, S * 1.3, { black: true }); }
         const fl = t < T.boom + 150 ? 0 : 1 - prog(t, T.boom + 150, T.boom + 700);
         if (fl > 0) { g.fillStyle = `rgba(${FLASH},${fl})`; g.fillRect(-60, -60, W + 120, H + 120); }
+        if (PW >= 4) { const f2 = t >= T.boom + 380 ? .8 * (1 - prog(t, T.boom + 380, T.boom + 820)) : 0; if (f2 > 0) { g.fillStyle = `rgba(${FLASH},${f2})`; g.fillRect(-60, -60, W + 120, H + 120); }
+          for (let i = 0; i < 3; i++) { const q = prog(t, T.boom + 380 + i * 110, T.boom + 1500 + i * 110); if (q > 0 && q < 1) hexRing(cx, cy, M * easeOut(q), (1 - q) * .8 * fadeOut, 5 - i, -i * .3, `hsl(${(i * 90 + t * .3) % 360},95%,70%)`); } }
         const sfl = t >= T.slam ? .55 * (1 - prog(t, T.slam, T.slam + 260)) : 0;
         if (sfl > 0) { g.fillStyle = `rgba(${FLASH},${sfl})`; g.fillRect(-60, -60, W + 120, H + 120); }
 
+        if (PW >= 4 && t >= T.slam) sparkles(cx, by, S, fadeOut * prog(t, T.slam, T.slam + 600), t);
         if (t >= T.slam) {
           const rA = fadeOut, vw = W / dpr;
           // 화면 테두리 HUD
@@ -832,6 +888,8 @@
             g.shadowBlur = 0; g.font = `${10 * dpr}px Silkscreen, monospace`; g.fillStyle = '#94a3b8';
             const subs = [`${kind} COMPLETE  ·  NODE ${ADDR}  ·  LINK ESTABLISHED`, `${kind} COMPLETE  ·  ${ADDR}`, `${kind} COMPLETE`];
             g.fillText(subs.find(x => g.measureText(x).width < W - 60 * dpr) || subs[2], cx, ty + 20 * dpr);
+            g.font = `${14 * dpr}px sans-serif`; g.fillStyle = PW >= 4 ? `hsl(${t * .15 % 360},95%,72%)` : tint; g.shadowColor = tint; g.shadowBlur = 10 * dpr;
+            g.fillText(POWER.stars[PW], cx, ty + 42 * dpr);
             g.restore();
           }
           // 이름

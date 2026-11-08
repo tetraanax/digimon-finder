@@ -87,7 +87,7 @@
     });
   }
   // node kinds
-  const DOT = 0, SQUARE = 1, DIAMOND = 2, RING = 3, CROSS = 4, HUB = 5, RELAY = 6, DUST = 7;
+  const DOT = 0, SQUARE = 1, DIAMOND = 2, RING = 3, CROSS = 4, HUB = 5, RELAY = 6, DUST = 7, BEAD = 8;
 
   /* ---------- 구역마다 하나뿐인 노드 구성 ----------
      구역 이름으로 모양을 정해요. 비슷한 모양이 겹치지 않도록 구역마다 따로 만들었어요.
@@ -494,7 +494,24 @@
       const near = (a, kk) => { for (const i of a) a.filter(j => j !== i).map(j => [j, d2(i, j)]).sort((p, q) => p[1] - q[1]).slice(0, kk).forEach(([j]) => link(i, j)); return a; };
       const box = (x, h, z, w, hh, d, k) => { const c = []; for (const dy of [0, hh]) for (const [dx, dz] of [[-w, -d], [w, -d], [w, d], [-w, d]]) c.push(at(x + dx, h + dy, z + dz, k));
         for (let i = 0; i < 4; i++) { link(c[i], c[(i + 1) % 4]); link(c[4 + i], c[4 + (i + 1) % 4]); link(c[i], c[4 + i]); } return c; };
+      const e0 = E.length;
       SIG[shape]({ at, put, link, chain, pts, fib, closest, near, box, hub, R, r, J: () => (r() - .5) * 2 });
+      // 화려하게: 구조 선마다 반짝이는 구슬을 꿰어 넣어요 (긴 선일수록 여러 개)
+      for (let e = e0, e1 = E.length; e < e1; e += 2) {
+        const a = E[e], b = E[e + 1], L = Math.sqrt(d2(a, b)); if (L < R * .04) continue;
+        const m = Math.min(5, 1 + (L / (R * .12) | 0)); let p = a;
+        for (let q = 1; q <= m; q++) { const t = q / (m + 1);
+          const id = add(lerp(X[a], X[b], t), lerp(Y[a], Y[b], t), lerp(Z[a], Z[b], t), r() < .8 ? C[a] : C[b], BEAD, .5 + r() * .45, c);
+          if (q === 1) E[e + 1] = id; else link(p, id); p = id; }
+        link(p, b);
+      }
+      // 구역을 감싸는 반짝이 장막: 구조 점 몇 개에서 바깥으로 흩날리는 가는 실
+      for (let k = 0, nk = 24 + (r() * 16 | 0); k < nk && ids.length; k++) {
+        let p = ids[r() * ids.length | 0]; const d = randDir(), len = R * (.08 + r() * .1), sw2 = r() * 6.283;
+        for (let q = 1, nq = 3 + (r() * 4 | 0); q <= nq; q++) {
+          const w = Math.sin(q * .9 + sw2) * len * .5, id = add(X[p] + d[0] * len + w * d[2], Y[p] + d[1] * len, Z[p] + d[2] * len - w * d[0], col, BEAD, .45 + r() * .4, c);
+          link(p, id); p = id; }
+      }
       // make sure every node in the cluster reaches the hub (nearest-attachment)
       const attached = [hub];
       for (const id of ids) {
@@ -529,6 +546,48 @@
       let best = hubs[0], bd = Infinity;
       for (let j = 0; j < hubs.length; j++) if (find(hubs[j]) === find(hubs[0])) { const dd = d2(hubs[i], hubs[j]); if (dd < bd) { bd = dd; best = hubs[j]; } }
       link(hubs[i], best);
+    }
+    // 구역 사이 덩굴: 가까운 구역끼리 구조 속 여러 점에서 여러 점으로 휘감기며 이어지는 가닥들
+    {
+      const members = clusters.map(() => []);
+      for (let i = 0; i < X.length; i++) if (CL[i] >= 0 && K[i] !== HUB && K[i] !== BEAD) members[CL[i]].push(i);
+      const pickToward = (ci, tx, ty, tz) => { const m = members[ci]; let best = m[0], bd = Infinity;
+        for (let k = 0; k < 7; k++) { const i = m[r() * m.length | 0], dd = (X[i] - tx) ** 2 + (Y[i] - ty) ** 2 + (Z[i] - tz) ** 2; if (dd < bd) { bd = dd; best = i; } } return best; };
+      const strand = (a, b, ca, cb, amp) => {
+        const len = Math.sqrt(d2(a, b)) || 1, dx = (X[b] - X[a]) / len, dy = (Y[b] - Y[a]) / len, dz = (Z[b] - Z[a]) / len;
+        let ux = dz, uz = -dx; const ul = Math.hypot(ux, uz) || 1; ux /= ul; uz /= ul;
+        const vx = dy * uz, vy = dz * ux - dx * uz, vz = -dy * ux;
+        const steps = Math.min(30, 5 + Math.round(len / 420)), twist = (r() - .5) * 4, ph = r() * TAU, out = [];
+        let prev = a;
+        for (let s = 1; s < steps; s++) {
+          const t = s / steps, bow = Math.sin(Math.PI * t) * amp * (1 + .25 * Math.sin(t * 9 + ph)), w = ph + t * twist * TAU;
+          const ox = bow * Math.cos(w), oy = bow * Math.sin(w);
+          curRegion = t < .5 ? clusters[ca].region : clusters[cb].region;
+          const id = add(lerp(X[a], X[b], t) + ox * ux + oy * vx, lerp(Y[a], Y[b], t) + oy * vy, lerp(Z[a], Z[b], t) + ox * uz + oy * vz,
+            r() < (1 - t) ? clusters[ca].col : clusters[cb].col, RELAY, .7 + r() * .7, -1);
+          link(prev, id); prev = id; out.push(id);
+        }
+        link(prev, b); return out;
+      };
+      const vdone = new Set();
+      clusters.forEach((A, ca) => {
+        clusters.map((o, j) => [j, (o.x - A.x) ** 2 + (o.y - A.y) ** 2 + (o.z - A.z) ** 2]).filter(([j]) => j !== ca).sort((p, q) => p[1] - q[1]).slice(0, 5)
+          .forEach(([cb, dd], rank) => {
+            const key = ca < cb ? ca + '-' + cb : cb + '-' + ca; if (vdone.has(key)) return; vdone.add(key);
+            const B = clusters[cb], len = Math.sqrt(dd), nS = rank < 2 ? 3 + (r() * 3 | 0) : 1 + (r() * 2 | 0), strands = [];
+            for (let k = 0; k < nS; k++) strands.push(strand(pickToward(ca, B.x, B.y, B.z), pickToward(cb, A.x, A.y, A.z), ca, cb, (250 + len * .07) * (.35 + r() * .9)));
+            // 나란한 가닥끼리 가끔 가로로 이어 그물처럼
+            for (let k = 1; k < strands.length; k++) { const p = strands[k - 1], q = strands[k], m = Math.min(p.length, q.length);
+              for (let i = 1; i < m - 1; i++) if (r() < .14) link(p[i], q[i]); }
+            // 가닥에서 돋아나는 잔가지
+            for (const st of strands) for (let k = 0, nt = r() * 3 | 0; k < nt && st.length > 2; k++) {
+              let p = st[1 + (r() * (st.length - 2) | 0)]; const d = randDir(), step = 90 + r() * 120;
+              for (let q = 0, nq = 2 + (r() * 3 | 0); q < nq; q++) { curRegion = RG[p];
+                const id = add(X[p] + d[0] * step + (r() - .5) * 60, Y[p] + d[1] * step + (r() - .5) * 60, Z[p] + d[2] * step + (r() - .5) * 60, C[p], RELAY, .6 + r() * .5, -1);
+                link(p, id); p = id; }
+            }
+          });
+      });
     }
     // secret zones: built far above / below the world, joined by one long relay chain
     const secret = (region, cx, cy, cz, build) => {
@@ -583,7 +642,7 @@
     // regions: centroid of their clusters + the nodes you can land on
     const regions = REGION_NAMES.map((name, k) => ({ id: k, name, en: REGION_EN[k], col: REGION_COLOR[k], secret: isSecret(k), x: 0, y: 0, z: 0, clusters: [], nodes: [] }));
     clusters.forEach(cl => { const g = regions[cl.region]; g.clusters.push(cl); g.x += cl.x; g.y += cl.y; g.z += cl.z; });
-    for (let i = 0; i < n; i++) if (RG[i] >= 0 && K[i] !== RELAY && K[i] !== DUST) regions[RG[i]].nodes.push(i);
+    for (let i = 0; i < n; i++) if (RG[i] >= 0 && K[i] !== RELAY && K[i] !== DUST && K[i] !== BEAD) regions[RG[i]].nodes.push(i);
     regions.forEach(g => { const m = g.clusters.length || 1; g.x /= m; g.y /= m; g.z /= m;
       let rad = 0; for (const i of g.nodes) rad = Math.max(rad, Math.hypot(X[i] - g.x, Y[i] - g.y, Z[i] - g.z)); g.rad = rad || 600; });
     return { n, X: Float32Array.from(X), Y: Float32Array.from(Y), Z: Float32Array.from(Z), C: Uint8Array.from(C), K: Uint8Array.from(K),
@@ -606,7 +665,7 @@
       this.mode = 'idle'; this.visited = new Map(); this.pathEdges = new Set(); this.labels = []; this.trail = [];
       this.edgeCount = this.G.E.length / 2;
       this.nodeCount = n;
-      this.makeSprites(); this.makePulses(320);
+      this.makeSprites(); this.makePulses(900);
       this.frame = this.frame.bind(this); this.resize = this.resize.bind(this);
     }
     makeSprites() {
@@ -708,7 +767,7 @@
     trace({ partner, names = [] }) {
       const G = this.G, start = this.current, { dist, prev } = this.bfs(start);
       const cands = []; let far = start;
-      for (let i = 0; i < G.n; i++) { if (dist[i] > dist[far]) far = i; if (dist[i] >= 12 && dist[i] <= 20 && G.K[i] !== RELAY && G.RG[i] >= 0 && !isSecret(G.RG[i]) && G.CL[i] !== G.CL[start]) cands.push(i); }
+      for (let i = 0; i < G.n; i++) { if (dist[i] > dist[far]) far = i; if (dist[i] >= 22 && dist[i] <= 40 && G.K[i] !== RELAY && G.K[i] !== BEAD && G.RG[i] >= 0 && !isSecret(G.RG[i]) && G.CL[i] !== G.CL[start]) cands.push(i); }
       const target = cands.length ? cands[Math.random() * cands.length | 0] : far;
       return this.go(target, prev, { intro: true, label: partner, sub: 'PARTNER FOUND', pool: names.filter(nm => nm !== partner),
         trav: '파트너 신호를 추적하는 중', lock: ['SIGNAL LOCKED', `${partner} 발견!`], totalMs: 4600, near: 520 });
@@ -740,7 +799,7 @@
         reached: 0, cum, len, dur, tcum: null, seg: 0, img: loadImg(o.img), camFrom: o.intro ? 950 : this.camD, quiet: !!o.quiet };
       if (o.quiet) { this.tr.lockFrom = this.camD; this.tr.near = this.camD; }
       { const beat = (o.intro ? 150 : o.quiet ? 260 : 120) / (o.intro ? 1 : (this.speed || 1)), tc = [0];
-        const relay = path.map(v => G.K[v] === RELAY);
+        const relay = path.map(v => G.K[v] === RELAY || G.K[v] === BEAD);
         // ease kind per hop: 0 full stop-and-go, 1 speed up into a relay, 2 slow down out of one, 3 glide
         const kind = []; for (let k = 1; k <= hops; k++) kind.push((relay[k] ? 1 : 0) + (relay[k - 1] ? 2 : 0));
         for (let k = 1; k <= hops; k++) { const share = (cum[k] - cum[k - 1]) / len * dur;
@@ -810,7 +869,7 @@
         tr.reached++;
         const id = tr.path[tr.reached], p = tr.path[tr.reached - 1];
         this.visited.set(id, now); this.pathEdges.add(p < id ? p * G.n + id : id * G.n + p);
-        if (withLabels && tr.reached < tr.hops && G.K[id] !== RELAY && tr.pool.length)
+        if (withLabels && tr.reached < tr.hops && G.K[id] !== RELAY && G.K[id] !== BEAD && tr.pool.length)
           this.labels.push({ i: id, t: now, name: tr.pool[Math.random() * tr.pool.length | 0] });
       }
       if (!this.visited.has(tr.path[0])) this.visited.set(tr.path[0], now);
@@ -966,14 +1025,29 @@
         g.globalAlpha = Math.min(1, 1600 * DK / PZ[a]); g.drawImage(this.glow[G.C[a]], x - sz, y - sz, sz * 2, sz * 2);
       }
 
-      /* nodes */
+      /* nodes — 작게 보이는 점은 색 × 밝기별로 모아서 한 번에 그려요 (노드가 많아도 빠르게) */
+      // 작은 점은 픽셀 버퍼에 직접 찍고 한 장으로 올려요: 노드가 수만 개여도 거의 비용이 들지 않아요
+      if (!this.dotC || this.dotC.width !== W || this.dotC.height !== H) {
+        this.dotC = document.createElement('canvas'); this.dotC.width = W; this.dotC.height = H;
+        this.dotG = this.dotC.getContext('2d'); this.dotI = this.dotG.createImageData(W, H); this.dotB = new Uint32Array(this.dotI.data.buffer);
+        this.rgb = PALETTE.map(h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)]);
+      }
+      const DB = this.dotB, RGB = this.rgb; DB.fill(0);
+      const dot = (ci, a, x, y, d) => {
+        const n0 = Math.max(1, Math.min(5, Math.round(d))), x0 = Math.round(x), y0 = Math.round(y);
+        if (x0 < 0 || y0 < 0 || x0 + n0 > W || y0 + n0 > H) return;
+        const c = RGB[ci], A = Math.min(255, a * 255 | 0), v = (A << 24 | c[2] << 16 | c[1] << 8 | c[0]) >>> 0;
+        for (let yy = 0; yy < n0; yy++) { let o = (y0 + yy) * W + x0; for (let xx = 0; xx < n0; xx++, o++) if ((DB[o] >>> 24) < A) DB[o] = v; }
+      };
       for (let i = 0; i < n; i++) {
         if (!onScreen(i)) continue;
         const kind = G.K[i], s = F / PZ[i], x = PX[i], y = PY[i], col = PALETTE[G.C[i]];
         const depthA = Math.max(.5, Math.min(1, 1800 * DK / PZ[i]));
         const vis = this.visited.has(i);
-        if (kind === DUST) { g.globalAlpha = .55 * depthA; g.fillStyle = col; const d = Math.max(1, G.S[i] * s * 1.6); g.fillRect(x, y, d, d); continue; }
+        if (kind === DUST) { dot(G.C[i], .55 * depthA, x, y, Math.max(1, G.S[i] * s * 1.6)); continue; }
+        if (kind === BEAD && !vis) { const d = Math.max(1.2 * dpr, G.S[i] * s * 2.2); dot(G.C[i], depthA * (.55 + .45 * Math.sin(now * .004 + i * 1.7)), x - d * .5, y - d * .5, d); continue; }
         const sz = Math.max(1.8 * dpr, G.S[i] * s * 2.6);
+        if (!vis && kind !== HUB && sz < 3.2 * dpr) { const d = kind === RELAY ? sz * .7 : sz; dot(G.C[i], kind === RELAY ? depthA * .8 : depthA, x - d * .5, y - d * .5, d); continue; }
         if (kind === HUB) {
           const gs = sz * 6; g.globalAlpha = .8 * depthA; g.drawImage(this.glow[G.C[i]], x - gs, y - gs, gs * 2, gs * 2);
           g.globalAlpha = depthA; g.strokeStyle = col; g.lineWidth = Math.max(1, sz * .25);
@@ -981,6 +1055,8 @@
           g.fillStyle = '#ffffff'; g.beginPath(); g.arc(x, y, sz * .7, 0, 6.283); g.fill();
           continue;
         }
+        if ((kind === DIAMOND || kind === RING || kind === CROSS) && PZ[i] < 3200) { // 반짝이는 장식 점
+          const gs = sz * (2.4 + 1.2 * Math.sin(now * .003 + i)); g.globalAlpha = .45 * depthA; g.drawImage(this.glow[G.C[i]], x - gs, y - gs, gs * 2, gs * 2); }
         g.globalAlpha = vis ? 1 : depthA; g.fillStyle = vis ? '#ffffff' : col; g.strokeStyle = vis ? '#ffffff' : col;
         switch (kind) {
           case DOT: g.beginPath(); g.arc(x, y, sz * .6, 0, 6.283); g.fill(); break;
@@ -989,10 +1065,13 @@
           case RING: g.lineWidth = Math.max(1, sz * .25); g.beginPath(); g.arc(x, y, sz * .8, 0, 6.283); g.stroke(); break;
           case CROSS: g.fillRect(x - sz, y - sz * .18, sz * 2, sz * .36); g.fillRect(x - sz * .18, y - sz, sz * .36, sz * 2); break;
           case RELAY: g.globalAlpha *= .8; g.fillRect(x - sz * .35, y - sz * .35, sz * .7, sz * .7); break;
+          case BEAD: g.fillRect(x - sz * .3, y - sz * .3, sz * .6, sz * .6); break;
         }
         if (vis) { const age = now - this.visited.get(i); if (age < 800) { const k = age / 800, rr = sz + k * 40 * dpr;
           g.globalAlpha = 1 - k; g.strokeStyle = col; g.lineWidth = 2 * dpr; g.beginPath(); g.arc(x, y, rr, 0, 6.283); g.stroke(); } }
       }
+
+      this.dotG.putImageData(this.dotI, 0, 0); g.globalAlpha = 1; g.drawImage(this.dotC, 0, 0);
 
       /* packet + trail */
       this.trail.forEach((tp, k) => { const p = proj(tp[0], tp[1], tp[2]); if (!p) return; const sz = (4 + k * .9) * dpr;

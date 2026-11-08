@@ -414,7 +414,7 @@ function applyEvolution(evo){
 }
 async function playEvolution(evo, kind = 'EVOLUTION'){
   const me = J, cap = capacity(evo.name, evo.stage), from = J.form;
-  await window.evoCinematic.play({ from, to: evo.name, partner: evo.partner, desc: infoOf(evo.name), kind, attr: attrOf(evo.name), fromCap: capacity(from, J.stage), label: [evo.label || evo.special || stageLabel(evo.stage), ATTR[attrOf(evo.name)][0]].join(' · '), cap, speed: () => NET.speed || 1, alive: () => J === me });
+  await window.evoCinematic.play({ from, to: evo.name, partner: evo.partner, desc: infoOf(evo.name), kind, attr: attrOf(evo.name), fromCap: capacity(from, J.stage), label: [evo.label || evo.special || stageLabel(evo.stage), ATTR[attrOf(evo.name)][0]].join(' · '), cap, power: evo.special ? 4 : kind === 'CAPSULE EVOLUTION' ? 2 : evo.stage, speed: () => NET.speed || 1, alive: () => J === me });
   if (J !== me) return;
   await NET.evolveFx({ label: evo.name, img: null, sub: `${kind} · ${evo.label || evo.special || stageLabel(evo.stage)} · ${cap}`, title: `${from}${ga(from)} ${evo.name}${ro(evo.name)} 진화!` });
   if (J !== me) return;
@@ -481,7 +481,7 @@ async function travel(region){
   log(`${name}에 도착했어요. ${pickFrom(evs)}`, 'arrive');
   if (evo) {
     const from = J.form;
-    await window.evoCinematic.play({ from, to: evo.name, desc: infoOf(evo.name), kind: 'SPECIAL EVOLUTION', attr: attrOf(evo.name), label: evo.special, cap: capacity(evo.name, 4), speed: () => NET.speed || 1, alive: () => J === me });
+    await window.evoCinematic.play({ from, to: evo.name, desc: infoOf(evo.name), kind: 'SPECIAL EVOLUTION', attr: attrOf(evo.name), label: evo.special, cap: capacity(evo.name, 4), power: 4, speed: () => NET.speed || 1, alive: () => J === me });
     if (J !== me) return;
     applyEvolution(evo); if (J.exp) J.map[J.exp - 1] = 'evo';
     log(`${from}${ga(from)} ${evo.name}${ro(evo.name)} 진화했어요! (${evo.special} · ${capacity(evo.name, 4)})`, 'evo sp', null, evo.name);
