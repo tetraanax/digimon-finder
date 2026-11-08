@@ -113,6 +113,8 @@
       t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
   }
   const lerp = (a, b, t) => a + (b - a) * t;
+  // 1인칭(시점 고정): 빛나는 점(파트너) 뒤로 얼마나 떨어질지, 얼마나 내려다볼지(라디안)
+  const FPV_DIST = 520, FPV_TILT = .24;
   const imgCache = new Map();
   const loadImg = src => { if (!src) return null; if (!imgCache.has(src)) { const im = new Image(); im.src = src; imgCache.set(src, im); } return imgCache.get(src); };
   const roJosa = w => { const c = w.charCodeAt(w.length - 1), k = (c >= 0xAC00 && c <= 0xD7A3) ? (c - 0xAC00) % 28 : 0; return (k === 0 || k === 8) ? '로' : '으로'; };
@@ -660,11 +662,11 @@
             const la = tr.path[Math.min(tr.hops, seg + 4)];
             let dx = G.X[la] - fx, dy = G.Y[la] - fy, dz = G.Z[la] - fz;
             if (dx * dx + dy * dy + dz * dz < 400) { dx = G.X[b] - G.X[a]; dy = G.Y[b] - G.Y[a]; dz = G.Z[b] - G.Z[a]; }
-            const dl = Math.hypot(dx, dy, dz) || 1, wantRot = Math.atan2(dx / dl, dz / dl), wantPitch = Math.max(-1.25, Math.min(1.25, Math.asin(dy / dl)));
+            const dl = Math.hypot(dx, dy, dz) || 1, wantRot = Math.atan2(dx / dl, dz / dl), wantPitch = Math.max(-1.1, Math.min(1.3, Math.asin(dy / dl) + FPV_TILT));
             let dr = wantRot - this.rot; dr = Math.atan2(Math.sin(dr), Math.cos(dr));
             const k = 1 - Math.pow(1 - .14 * this.fpvK, dt / 16);
             this.rot += dr * k; this.pitch += (wantPitch - this.pitch) * k;
-            this.camD = lerp(this.camD, 150, easeOut(this.fpvK));
+            this.camD = lerp(this.camD, FPV_DIST, easeOut(this.fpvK));
             this.userRotT = now;
           }
           const rg = G.RG[b] >= 0 ? REGION_EN[G.RG[b]] : 'DEEP WEB';
@@ -675,7 +677,7 @@
       if (this.mode === 'lock') {
         const t = now - this.t0;
         this.current = tr.target; fx = G.X[tr.target]; fy = G.Y[tr.target]; fz = G.Z[tr.target];
-        this.camD = lerp(tr.fpvHome ? 150 : (tr.lockFrom ?? 720), tr.near, ease(Math.min(1, t / 900)));
+        this.camD = lerp(tr.fpvHome ? FPV_DIST : (tr.lockFrom ?? 720), tr.near, ease(Math.min(1, t / 900)));
         if (tr.fpvHome) { this.pitch += (tr.fpvHome.pitch - this.pitch) * Math.min(1, dt / 220); this.fpvK = Math.max(0, (this.fpvK || 0) - dt / 900); }
         this.status(tr.lockText[0], tr.lockText[1]);
         if (t >= (tr.quiet ? 350 : tr.flash ? 2000 : 1400) / (tr.quiet ? (this.speed || 1) : 1)) { this.mode = 'idle'; this.idleT = now; const r = this.resolve; this.resolve = null; r && r(); }
@@ -697,7 +699,7 @@
       /* projection */
       const fpvNow = this.fpv && this.exploring && tr && tr.fpvHome && (this.mode === 'trav' || this.mode === 'lock') ? (this.fpvK || 0) : 0;
       // 1인칭일 때는 오른쪽 패널에 가리지 않도록 빈 공간의 가운데를 바라봐요 (viewInset: 패널이 차지한 오른쪽 폭, CSS px)
-      const F = Math.min(W, H) * lerp(1.05, .62, fpvNow), cxs = lerp(W / 2, (W - (this.viewInset || 0) * dpr) / 2, fpvNow), cys = H * lerp(.47, .5, fpvNow);
+      const F = Math.min(W, H) * lerp(1.05, .62, fpvNow), cxs = lerp(W / 2, (W - (this.viewInset || 0) * dpr) / 2, fpvNow), cys = H * lerp(.47, .64, fpvNow);
       const cr = Math.cos(this.rot), sr = Math.sin(this.rot), cp = Math.cos(this.pitch), sp = Math.sin(this.pitch), camD = this.camD;
       const ox = this.focus.x, oy = this.focus.y, oz = this.focus.z;
       const PX = this.px, PY = this.py, PZ = this.pz, n = G.n, DK = Math.max(1, camD / 4800);
@@ -786,22 +788,18 @@
           g.globalAlpha = 1 - k; g.strokeStyle = col; g.lineWidth = 2 * dpr; g.beginPath(); g.arc(x, y, rr, 0, 6.283); g.stroke(); } }
       }
 
-      /* packet + trail (1인칭에서는 우리가 그 자리에 있으니 숨겨요) */
-      if (fpvNow < .5) this.trail.forEach((tp, k) => { const p = proj(tp[0], tp[1], tp[2]); if (!p) return; const sz = (4 + k * .9) * dpr;
+      /* packet + trail */
+      this.trail.forEach((tp, k) => { const p = proj(tp[0], tp[1], tp[2]); if (!p) return; const sz = (4 + k * .9) * dpr;
         g.globalAlpha = (k + 1) / this.trail.length * .5; g.drawImage(this.glow[PALETTE.length], p[0] - sz, p[1] - sz, sz * 2, sz * 2); });
-      if (this.mode !== 'idle' && fpvNow < .5) { const p = proj(fx, fy, fz); if (p) {
+      if (this.mode !== 'idle') { const p = proj(fx, fy, fz); if (p) {
         const sz = 30 * dpr; g.globalAlpha = 1; g.drawImage(this.glow[0], p[0] - sz, p[1] - sz, sz * 2, sz * 2);
         g.drawImage(this.glow[PALETTE.length], p[0] - sz * .5, p[1] - sz * .5, sz, sz); } }
 
       g.globalCompositeOperation = 'source-over';
-      if (fpvNow > 0 && this.mode === 'trav') {                 // 1인칭: 속도감 있는 가장자리 빛 + 조준점
+      if (fpvNow > 0 && this.mode === 'trav') {                 // 1인칭: 속도감 있는 가장자리 빛
         const vg = g.createRadialGradient(cxs, cys, Math.min(W, H) * .25, cxs, cys, Math.hypot(W, H) * .6);
         vg.addColorStop(0, 'rgba(34,211,238,0)'); vg.addColorStop(1, `rgba(14,165,233,${.28 * fpvNow})`);
         g.globalAlpha = 1; g.fillStyle = vg; g.fillRect(0, 0, W, H);
-        g.strokeStyle = `rgba(165,243,252,${.7 * fpvNow})`; g.lineWidth = 1.5 * dpr; const cr2 = 14 * dpr;
-        g.beginPath(); g.arc(cxs, cys, cr2, 0, Math.PI * 2);
-        g.moveTo(cxs - cr2 * 2.2, cys); g.lineTo(cxs - cr2 * 1.3, cys); g.moveTo(cxs + cr2 * 1.3, cys); g.lineTo(cxs + cr2 * 2.2, cys);
-        g.moveTo(cxs, cys - cr2 * 2.2); g.lineTo(cxs, cys - cr2 * 1.3); g.moveTo(cxs, cys + cr2 * 1.3); g.lineTo(cxs, cys + cr2 * 2.2); g.stroke();
       }
       /* candidate labels */
       g.textAlign = 'left';

@@ -225,16 +225,38 @@ function hideToast(){ clearTimeout(toastTimer); toastEl.classList.remove('in'); 
 const sleep = (ms, me) => new Promise(res => setTimeout(() => res(J === me), ms / (NET.speed || 1)));
 
 /* ---------- evolution ---------- */
-// 가장 높은 성향이 본래 성격과 맞으면 정통 루트, 아니면 그 성향 계열
-function decideEvolution(k){
+// 속성: 어둠이 가장 높거나 전체의 30% 이상이면 바이러스종. 아니면 용기+우정이 앞서면 백신종, 지혜+힘이 앞서면 데이터종을 먼저 골라요
+const attrOf = name => (window.DIGI_ATTR || {})[name] || ((window.DIGI.find(d => d.ko === name) || {}).attr) || 'fre';
+function wantAttr(){
+  const t = J.traits, sum = statSum(), top = [...TRAITS].sort((a, b) => t[b] - t[a])[0];
+  if (t.dark > 0 && (top === 'dark' || t.dark >= sum * .3)) return 'vir';
+  return t.courage + t.friend >= t.wisdom + t.power ? 'vac' : 'dat';
+}
+// 다음 단계 후보: 정통 루트 하나이거나, 성향 계열에서 속성이 맞는 여러 후보. 진화할 때 이 중 하나가 무작위로 나와요
+function evoCandidates(k){
   const t = J.traits, order = [...TRAITS].sort((a, b) => t[b] - t[a]), top = order[0], gap = t[top] - t[order[1]];
-  const natural = J.dg.vibe.map(v => JD.natural[v]);
-  const std = J.dg.line[k];
+  const want = wantAttr(), natural = J.dg.vibe.map(v => JD.natural[v]), std = J.dg.line[k];
   const balanced = gap < JD.balanceGap && top !== 'dark';
-  if (!J.branch && std && std !== '?' && top !== 'dark' && (natural.includes(top) || balanced))
-    return { name: std, stage: k + 1, path: '정통 진화' };
+  const pack = (names, path, branch) => names.map(n => ({ name: n, stage: k + 1, path, branch, attr: attrOf(n) }));
+  if (!J.branch && std && std !== '?' && top !== 'dark' && (natural.includes(top) || balanced)) {
+    const a = attrOf(std);   // 본래 바이러스종 파트너(길몬 등)는 정통 루트가 바이러스여도 그대로
+    if (want === 'vir' ? a === 'vir' : (a !== 'vir' || J.dg.attr === 'vir')) return pack([std], '정통 진화');
+  }
   const pool = JD.branches[k][top].filter(n => n !== J.form);
-  return { name: pool[hash(J.dg.en + k + top) % pool.length], stage: k + 1, path: `${JD.traits[top]} 계열`, branch: top };
+  if (want === 'vir') {
+    const v = pool.filter(n => attrOf(n) === 'vir');
+    if (v.length) return pack(v, `${JD.traits[top]} 계열 · 바이러스종`, top);
+    return pack(JD.branches[k].dark.filter(n => n !== J.form), '어둠에 물든 바이러스종', 'dark');
+  }
+  const virusOk = t.dark >= statSum() * .15;       // 어둠이 거의 없으면 바이러스종은 빼요
+  const okPool = pool.filter(n => virusOk || attrOf(n) !== 'vir');
+  const best = okPool.filter(n => attrOf(n) === want || attrOf(n) === 'fre');
+  const list = best.length ? best : okPool.length ? okPool : pool;
+  return pack(list, `${JD.traits[top]} 계열 · ${ATTR[want][0]}종`, top);
+}
+function decideEvolution(k){
+  const c = evoCandidates(k);
+  return c[Math.floor(Math.random() * c.length)];
 }
 function applyEvolution(evo){
   J.form = evo.name; J.stage = evo.stage; J.label = evo.label || evo.special || stageLabel(evo.stage);
@@ -244,7 +266,7 @@ function applyEvolution(evo){
 }
 async function playEvolution(evo, kind = 'EVOLUTION'){
   const me = J, cap = capacity(evo.name, evo.stage), from = J.form;
-  await window.evoCinematic.play({ from, to: evo.name, partner: evo.partner, desc: infoOf(evo.name), kind, label: evo.label || evo.special || stageLabel(evo.stage), cap, speed: () => NET.speed || 1, alive: () => J === me });
+  await window.evoCinematic.play({ from, to: evo.name, partner: evo.partner, desc: infoOf(evo.name), kind, label: [evo.label || evo.special || stageLabel(evo.stage), ATTR[attrOf(evo.name)][0]].join(' · '), cap, speed: () => NET.speed || 1, alive: () => J === me });
   if (J !== me) return;
   await NET.evolveFx({ label: evo.name, img: null, sub: `${kind} · ${evo.label || evo.special || stageLabel(evo.stage)} · ${cap}`, title: `${from}${ga(from)} ${evo.name}${ro(evo.name)} 진화!` });
   if (J !== me) return;
@@ -447,7 +469,8 @@ function openInfo(i){
   const chips = [
     `<span class="chip ${r.special ? 'sp' : ''}">${esc(r.label)}</span>`,
     `<span class="chip cap">${esc(r.cap)}</span>`,
-    rook ? `<span class="chip attr ${ATTR[rook.attr][1]}">${ATTR[rook.attr][0]}</span><span class="chip">${esc(rook.type)}</span>` : '',
+    `<span class="chip attr ${ATTR[attrOf(name)][1]}">${ATTR[attrOf(name)][0]}</span>`,
+    rook ? `<span class="chip">${esc(rook.type)}</span>` : '',
   ].join('');
   infoEl.innerHTML = `
     <button class="ji-x" type="button" aria-label="닫기">×</button>
@@ -489,8 +512,10 @@ function renderJourney(){
   $('jProg').style.width = Math.min(100, J.exp / JD.journeyEnd * 100) + '%';
   const nx = J.special ? null : JD.evolveNeed[J.stage];
   const found = JD.secrets.filter(d => NET.unlocked.has(NET.regionId(d.region)));
-  $('jSecret').innerHTML = (nx ? `<p class="j-next">다음 진화 조건 · <span class="${statTop() >= nx.top ? 'ok' : ''}">가장 높은 능력치 ${statTop()}/${nx.top}</span> · <span class="${statSum() >= nx.total ? 'ok' : ''}">합계 ${statSum()}/${nx.total}</span>${J.exp < nx.steps ? ` · <span>${nx.steps - J.exp}걸음 더</span>` : ''}</p>` : '') +
-    found.map(d => `<p class="hint open">✦ ${esc(d.region)} · 지도 어딘가에 열려 있어요</p>`).join('');
+  const cands = nx ? evoCandidates(J.stage) : [];
+  const pred = cands.length ? `<div class="j-pred"><span class="jp-h">다음 진화 예상${cands.length > 1 ? ` · ${cands.length}개 중 하나` : ''}<em>${esc(cands[0].path)}</em></span><div class="jp-list">${cands.map(c => `<span class="jp">${picTag(c.name, 'jp-pic')}<b>${esc(c.name)}</b><i class="${ATTR[c.attr][1]}">${ATTR[c.attr][0]}</i></span>`).join('')}</div></div>` : '';
+  $('jSecret').innerHTML = pred + (nx ? `<p class="j-next">다음 진화 조건 · <span class="${statTop() >= nx.top ? 'ok' : ''}">가장 높은 능력치 ${statTop()}/${nx.top}</span> · <span class="${statSum() >= nx.total ? 'ok' : ''}">합계 ${statSum()}/${nx.total}</span>${J.exp < nx.steps ? ` · <span>${nx.steps - J.exp}걸음 더</span>` : ''}</p>` : '') +
+    (found.length ? `<p class="hint open" title="지도를 축소해서 찾아보세요">✦ 열린 숨겨진 구역 ${found.map(d => `<span class="zone">${esc(d.region)}</span>`).join('')}</p>` : '');
   $('jEnd').disabled = J.busy;
   if (!infoEl.hidden) openInfo(Math.min(+infoEl.dataset.i, J.route.length - 1));   // 열려 있으면 새 정보로
 }
@@ -528,7 +553,7 @@ netc.addEventListener('pointermove', e => { if (J && !J.busy && card.hidden && !
 netc.addEventListener('pointerleave', () => { NET.hover = -1; });
 netc.addEventListener('click', e => { if (J && !J.busy && !NET.pinching) travel(NET.regionAt(e.clientX, e.clientY)); });
 // 개발용: 주소 끝에 #debug를 붙이면 콘솔에서 __digi.travel(구역번호)로 이동을, __digi.evolve({name, stage, label, partner}, 'JOGRESS EVOLUTION')로 진화 연출을 시험할 수 있어요
-if (location.hash === '#debug') window.__digi = { travel, evolve: playEvolution, net: NET, get journey(){ return J; } };
+if (location.hash === '#debug') window.__digi = { travel, evolve: playEvolution, candidates: k => evoCandidates(k ?? J.stage), render: () => renderJourney(), net: NET, get journey(){ return J; } };
 $('jEnd').addEventListener('click', () => showLog());
 $('jHome').addEventListener('click', closeNet);
 document.querySelectorAll('#rot [data-rot]').forEach(b => {
