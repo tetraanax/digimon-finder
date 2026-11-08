@@ -170,6 +170,14 @@ const wildOf = net => (byName(JD.wildBy, net) || JD.wild).filter(m => m !== J.fo
 const fxChips = fx => fx ? Object.entries(fx).map(([k, v]) => `<i class="t-${k}">${JD.traits[k]} +${v}</i>`).join('') : '';
 const stageLabel = st => JD.stageNames[Math.min(st, 3)];
 const picOf = name => window.digiImage(name);
+// 디지몬 설명: 진화형은 js/digi-info.js, 성장기 파트너는 data.js 의 d. 'X'·' 솔라 모드'는 기본 형태 설명에 한 줄 더해요
+function infoOf(name){
+  const I = window.DIGI_INFO || {}, rook = name => { const d = window.DIGI.find(x => x.ko === name); return d && d.d; };
+  if (I[name] || rook(name)) return I[name] || rook(name);
+  if (/ 솔라 모드$/.test(name)) { const b = infoOf(name.replace(/ 솔라 모드$/, '')); return (b ? b + ' ' : '') + '태양계의 빛을 받아들여 온몸이 태양처럼 빛나는 모습이에요.'; }
+  if (/X$/.test(name)) { const b = infoOf(name.slice(0, -1)); return (b ? b + ' ' : '') + 'X항체를 얻어 본래의 힘이 한층 더 깨어난 모습이에요.'; }
+  return '';
+}
 const picTag = (name, cls) => { const src = picOf(name); return src ? `<img class="${cls}" src="${esc(src)}" alt="${esc(name)}" loading="lazy">` : ''; };
 // 성향 점수: 데이터의 기본값(1~3)에 배율을 곱하고 약간의 운을 더해요. 최대 statMax
 const gain = (fx, scale) => fx ? Object.fromEntries(Object.entries(fx).map(([k, v]) => [k, v * scale + Math.floor(Math.random() * (scale / 2 + 1))])) : null;
@@ -185,12 +193,13 @@ function startJourney(){
   hideCard(); hideChoice();
   netEl.classList.add('explore'); NET.setExplore(true); NET.setStay(false);
   $('journey').hidden = false;
+  requestAnimationFrame(updateInset);
   log(`${dg.ko}${wa(dg.ko)} 함께 여행을 떠나요. 가고 싶은 네트워크 구역을 눌러 보세요. 마우스 휠로 지도를 확대·축소할 수 있어요.`, 'sys');
   idleStatus();
 }
 function endJourney(){
   J = null; NET.setExplore(false); NET.setStay(false); NET.speed = 1;
-  netEl.classList.remove('explore'); $('journey').hidden = true; hideChoice(); hideToast();
+  netEl.classList.remove('explore'); $('journey').hidden = true; closeInfo(); hideChoice(); hideToast();
 }
 function idleStatus(){
   $('netStat').innerHTML = `EXPLORE · ${J.moves} TRIPS · ${J.exp} STEPS · ${esc(NET.regionName(NET.currentRegion()) || 'DEEP WEB')}<b>가고 싶은 구역을 눌러 주세요</b>`;
@@ -235,15 +244,21 @@ function applyEvolution(evo){
 }
 async function playEvolution(evo, kind = 'EVOLUTION'){
   const me = J, cap = capacity(evo.name, evo.stage), from = J.form;
-  await NET.evolveFx({ label: evo.name, img: picOf(evo.name), sub: `${kind} · ${evo.label || evo.special || stageLabel(evo.stage)} · ${cap}`, title: `${from}${ga(from)} ${evo.name}${ro(evo.name)} 진화!` });
+  await window.evoCinematic.play({ from, to: evo.name, partner: evo.partner, desc: infoOf(evo.name), kind, label: evo.label || evo.special || stageLabel(evo.stage), cap, speed: () => NET.speed || 1, alive: () => J === me });
+  if (J !== me) return;
+  await NET.evolveFx({ label: evo.name, img: null, sub: `${kind} · ${evo.label || evo.special || stageLabel(evo.stage)} · ${cap}`, title: `${from}${ga(from)} ${evo.name}${ro(evo.name)} 진화!` });
   if (J !== me) return;
   applyEvolution(evo);
   log(`${from}${ga(from)} ${evo.name}${ro(evo.name)} 진화했어요! (${evo.path} · ${cap})`, 'evo', null, evo.name);
 }
+// 진화 조건: 가장 높은 능력치·능력치 합계·최소 걸음 수
+const statTop = () => Math.max(...TRAITS.map(t => J.traits[t]));
+const statSum = () => TRAITS.reduce((m, t) => m + J.traits[t], 0);
+const evoReady = need => J.exp >= need.steps && statTop() >= need.top && statSum() >= need.total;
 async function maybeEvolve(){
   if (J.special) return;
-  const k = JD.evolveAt.findIndex((m, i) => J.exp >= m && i + 1 > J.stage);
-  if (k >= 0) await playEvolution(decideEvolution(k));
+  const k = J.stage, need = JD.evolveNeed[k];
+  if (need && evoReady(need)) await playEvolution(decideEvolution(k));
 }
 
 /* ---------- hidden zones: conditions are never shown on screen ---------- */
@@ -282,10 +297,7 @@ async function travel(region){
   const me = J, secret = NET.isSecretRegion(region);
   const evo = secret ? specialEvolution(secretDef(NET.regionName(region))) : null;
   const opts = {};
-  if (evo) {
-    const cap = capacity(evo.name, evo.stage);
-    Object.assign(opts, { label: evo.name, img: picOf(evo.name), flash: true, sub: `${evo.sub} · ${cap}`, title: `${J.form}${ga(J.form)} ${evo.name}${ro(evo.name)} 진화!` });
-  }
+  if (evo) window.evoCinematic.preload(evo.name);
   J.busy = true; NET.hover = -1; $('journey').classList.add('busy');
   const res = await NET.travelTo(region, opts);
   if (J !== me) return;
@@ -297,7 +309,10 @@ async function travel(region){
   const evs = byName(JD.events, name) || ['새로운 노드에 도착했어요.'];
   log(`${name}에 도착했어요. ${pickFrom(evs)}`, 'arrive');
   if (evo) {
-    const from = J.form; applyEvolution(evo);
+    const from = J.form;
+    await window.evoCinematic.play({ from, to: evo.name, desc: infoOf(evo.name), kind: 'SPECIAL EVOLUTION', label: evo.special, cap: capacity(evo.name, 4), speed: () => NET.speed || 1, alive: () => J === me });
+    if (J !== me) return;
+    applyEvolution(evo);
     log(`${from}${ga(from)} ${evo.name}${ro(evo.name)} 진화했어요! (${evo.special} · ${capacity(evo.name, 4)})`, 'evo sp', null, evo.name);
   }
   checkUnlocks();
@@ -326,10 +341,12 @@ async function roam(region, me){
     J.exp++;
     if (slots.has(i)) { await offerChoice(region); if (J !== me) return; }
     else {
-      const local = byName(JD.events, region.name);
-      if (local && Math.random() < .25) log(pickFrom(local));
+      // 최근 기록과 같은 문장은 다시 쓰지 않아요 (구역 사건이 한두 개뿐인 숨겨진 구역에서 같은 줄이 반복되던 문제)
+      const recentText = new Set(J.log.slice(-10).map(l => l.text)), recentSrc = new Set(J.log.slice(-10).map(l => l.src));
+      const local = (byName(JD.events, region.name) || []).filter(x => !recentText.has(x) && !recentText.has(`${region.name}에 도착했어요. ${x}`));
+      if (local.length && Math.random() < .25) log(pickFrom(local));
       else {
-        const last = J.log.length ? J.log[J.log.length - 1].src : null, pool = JD.roam.filter(e => e !== last);
+        const fresh = JD.roam.filter(e => !recentSrc.has(e)), pool = fresh.length ? fresh : JD.roam;
         const ev = pickFrom(pool), mon = pickFrom(wildOf(region.name));
         const fx = gain(ev.fx, JD.statGain.roam); addTraits(fx);
         log(fill(ev.t, region.name, mon), '', fx); J.log[J.log.length - 1].src = ev;
@@ -400,12 +417,60 @@ async function choose(opt){
   if (opt.kind === 'jogress') {
     J.jogressed = true;
     const st = Math.max(J.stage, opt.jg.stage);
-    await playEvolution({ name: opt.jg.result, stage: st, label: `${stageLabel(st)} · 조그레스`, path: `조그레스 진화 (${J.form} + ${opt.jg.b})` }, 'JOGRESS EVOLUTION');
+    await playEvolution({ name: opt.jg.result, stage: st, label: `${stageLabel(st)} · 조그레스`, path: `조그레스 진화 (${J.form} + ${opt.jg.b})`, partner: opt.jg.b }, 'JOGRESS EVOLUTION');
   } else if (opt.kind === 'capsule') {
     J.capsuled = true;
     await playEvolution({ name: opt.dm.armor, stage: 1, label: '아머체', path: `캡슐진화 · ${opt.dm.name}의 디지멘탈` }, 'CAPSULE EVOLUTION');
   }
 }
+
+/* ---------- 시점 고정(1인칭) 토글 — 켜 두면 구역 사이를 이동할 때 1인칭으로 봐요. 이 브라우저에 기억해요 ---------- */
+const fpvBtn = $('fpv');
+function updateInset(){ const j = $('journey'); NET.viewInset = (!j.hidden && innerWidth > 640) ? Math.max(0, innerWidth - j.getBoundingClientRect().left) : 0; }
+addEventListener('resize', updateInset);
+function setFpv(on){
+  NET.setFpv(on); fpvBtn.setAttribute('aria-pressed', on ? 'true' : 'false'); fpvBtn.classList.toggle('on', on);
+  try { localStorage.setItem('digi-fpv', on ? '1' : '0'); } catch (e) {}
+}
+fpvBtn.addEventListener('click', () => {
+  const on = fpvBtn.getAttribute('aria-pressed') !== 'true'; setFpv(on);
+  if (J) toast(on ? '시점 고정을 켰어요. 구역 사이를 이동할 때 1인칭으로 보여요.' : '시점 고정을 껐어요.', 'sys');
+});
+try { setFpv(localStorage.getItem('digi-fpv') === '1'); } catch (e) { setFpv(false); }
+
+/* ---------- 디지몬 정보 팝오버 (패널 위쪽 이름 / 루트 카드를 누르면) ---------- */
+const infoEl = $('jInfo');
+function openInfo(i){
+  if (!J) return;
+  const r = J.route[i] || J.route[J.route.length - 1], name = r.form, rook = window.DIGI.find(x => x.ko === name);
+  const pic = picOf(name), now = i === J.route.length - 1;
+  const chips = [
+    `<span class="chip ${r.special ? 'sp' : ''}">${esc(r.label)}</span>`,
+    `<span class="chip cap">${esc(r.cap)}</span>`,
+    rook ? `<span class="chip attr ${ATTR[rook.attr][1]}">${ATTR[rook.attr][0]}</span><span class="chip">${esc(rook.type)}</span>` : '',
+  ].join('');
+  infoEl.innerHTML = `
+    <button class="ji-x" type="button" aria-label="닫기">×</button>
+    ${pic ? `<div class="ji-pic"><img src="${esc(pic)}" alt="${esc(name)}"></div>` : ''}
+    <div class="ji-body">
+      <div class="ji-tag">${now ? 'NOW · 지금 모습' : `ROUTE ${i + 1} · 지나온 모습`}</div>
+      <h3>${esc(name)}</h3>
+      <div class="chips">${chips}</div>
+      <p>${esc(infoOf(name) || '아직 알려진 기록이 없는 디지몬이에요.')}</p>
+      <dl>
+        <dt>진화 경로</dt><dd>${esc(r.path || '—')}</dd>
+        <dt>다녀간 구역</dt><dd>${r.regions.length ? esc(r.regions.join(' · ')) : (now ? '아직 없어요' : '—')}</dd>
+      </dl>
+    </div>`;
+  infoEl.hidden = false; infoEl.dataset.i = i;
+  $('jWho').setAttribute('aria-expanded', 'true');
+  infoEl.querySelector('.ji-x').addEventListener('click', closeInfo);
+}
+function closeInfo(){ infoEl.hidden = true; $('jWho').setAttribute('aria-expanded', 'false'); }
+$('jWho').addEventListener('click', e => { e.stopPropagation(); if (!infoEl.hidden && +infoEl.dataset.i === J.route.length - 1) closeInfo(); else openInfo(J.route.length - 1); });
+$('jRoute').addEventListener('click', e => { const li = e.target.closest('li[data-i]'); if (!li) return; e.stopPropagation(); const i = +li.dataset.i; if (!infoEl.hidden && +infoEl.dataset.i === i) closeInfo(); else openInfo(i); });
+$('jRoute').addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('li[data-i]')) { e.preventDefault(); e.target.click(); } });
+document.addEventListener('click', e => { if (!infoEl.hidden && !infoEl.contains(e.target)) closeInfo(); });
 
 /* ---------- panel ---------- */
 function renderJourney(){
@@ -416,17 +481,18 @@ function renderJourney(){
   $('jPic').innerHTML = picTag(J.form, 'j-pic-img'); $('jPic').hidden = !picOf(J.form);
   $('jCap').textContent = capacity(J.form, J.stage);
   $('jMoves').textContent = `이동 ${J.moves} · ${J.exp}걸음`;
-  $('jRoute').innerHTML = J.route.map((r, i) => `<li class="${r.special ? 'sp' : ''}">${picTag(r.form, 'r-pic')}<b>${esc(r.form)}</b><small>${r.regions.length ? esc(r.regions.join('·')) : (i === J.route.length - 1 ? '지금 여기' : '—')}</small></li>`).join('');
+  $('jRoute').innerHTML = J.route.map((r, i) => `<li class="${r.special ? 'sp' : ''}" data-i="${i}" tabindex="0" role="button" aria-label="${esc(r.form)} 자세히 보기">${picTag(r.form, 'r-pic')}<b>${esc(r.form)}</b><small>${r.regions.length ? esc(r.regions.join('·')) : (i === J.route.length - 1 ? '지금 여기' : '—')}</small></li>`).join('');
   $('jRoute').scrollLeft = $('jRoute').scrollWidth;
   $('jTraits').innerHTML = TRAITS.map(t => `<div class="tr t-${t}"><span>${JD.traits[t]}</span><div class="bar"><i style="width:${J.traits[t] / JD.statMax * 100}%"></i></div><b>${J.traits[t]}</b></div>`).join('');
   $('jLog').innerHTML = J.log.slice(-6).map(l => `<li class="${l.cls}">${esc(l.text)}${l.fx ? ` <em>${fxChips(l.fx)}</em>` : ''}</li>`).join('');
   $('jLog').scrollTop = $('jLog').scrollHeight;
   $('jProg').style.width = Math.min(100, J.exp / JD.journeyEnd * 100) + '%';
-  const nx = JD.evolveAt.find((m, i) => i + 1 > J.stage);
+  const nx = J.special ? null : JD.evolveNeed[J.stage];
   const found = JD.secrets.filter(d => NET.unlocked.has(NET.regionId(d.region)));
-  $('jSecret').innerHTML = (nx && !J.special ? `<p class="j-next">다음 진화까지 ${Math.max(0, nx - J.exp)}걸음</p>` : '') +
+  $('jSecret').innerHTML = (nx ? `<p class="j-next">다음 진화 조건 · <span class="${statTop() >= nx.top ? 'ok' : ''}">가장 높은 능력치 ${statTop()}/${nx.top}</span> · <span class="${statSum() >= nx.total ? 'ok' : ''}">합계 ${statSum()}/${nx.total}</span>${J.exp < nx.steps ? ` · <span>${nx.steps - J.exp}걸음 더</span>` : ''}</p>` : '') +
     found.map(d => `<p class="hint open">✦ ${esc(d.region)} · 지도 어딘가에 열려 있어요</p>`).join('');
   $('jEnd').disabled = J.busy;
+  if (!infoEl.hidden) openInfo(Math.min(+infoEl.dataset.i, J.route.length - 1));   // 열려 있으면 새 정보로
 }
 function showLog(final = false){
   if (!J || J.busy) return;
@@ -461,8 +527,8 @@ const netc = $('netc');
 netc.addEventListener('pointermove', e => { if (J && !J.busy && card.hidden && !NET.pinching) NET.hover = NET.regionAt(e.clientX, e.clientY); });
 netc.addEventListener('pointerleave', () => { NET.hover = -1; });
 netc.addEventListener('click', e => { if (J && !J.busy && !NET.pinching) travel(NET.regionAt(e.clientX, e.clientY)); });
-// 개발용: 주소 끝에 #debug를 붙이면 콘솔에서 __digi.travel(구역번호)로 이동을 시험할 수 있어요
-if (location.hash === '#debug') window.__digi = { travel, net: NET, get journey(){ return J; } };
+// 개발용: 주소 끝에 #debug를 붙이면 콘솔에서 __digi.travel(구역번호)로 이동을, __digi.evolve({name, stage, label, partner}, 'JOGRESS EVOLUTION')로 진화 연출을 시험할 수 있어요
+if (location.hash === '#debug') window.__digi = { travel, evolve: playEvolution, net: NET, get journey(){ return J; } };
 $('jEnd').addEventListener('click', () => showLog());
 $('jHome').addEventListener('click', closeNet);
 document.querySelectorAll('#rot [data-rot]').forEach(b => {
@@ -479,10 +545,11 @@ $('jFast').addEventListener('click', e => {
   e.currentTarget.textContent = NET.speed > 1 ? '보통 속도 ▶' : '빠르게 ▶▶';
 });
 
-$('netSkip').addEventListener('click', () => NET.skip());
+$('netSkip').addEventListener('click', () => { if (window.evoCinematic.active) window.evoCinematic.skip(); else NET.skip(); });
 addEventListener('keydown', e => {
   if (e.key !== 'Escape' || netEl.hidden) return;
-  if (busy || (J && J.busy)) NET.skip(); else closeNet();
+  if (!infoEl.hidden) { closeInfo(); return; }
+  if (window.evoCinematic.active) window.evoCinematic.skip(); else if (busy || (J && J.busy)) NET.skip(); else closeNet();
 });
 
 $('f').addEventListener('submit', e => {

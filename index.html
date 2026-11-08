@@ -59,11 +59,14 @@
   <aside class="journey" id="journey" hidden aria-label="여행 정보">
     <div class="j-head">
       <span class="j-stage" id="jStage">성장기</span>
-      <span class="j-pic" id="jPic" hidden></span>
-      <b id="jName"></b>
+      <button class="j-who" id="jWho" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="jInfo" title="눌러서 자세히 보기">
+        <span class="j-pic" id="jPic" hidden></span>
+        <b id="jName"></b><i class="j-more" aria-hidden="true">ⓘ</i>
+      </button>
       <span class="j-cap" id="jCap"></span>
       <span class="j-moves" id="jMoves">이동 0</span>
     </div>
+    <div class="j-info" id="jInfo" role="dialog" aria-label="디지몬 정보" hidden></div>
     <ol class="j-route" id="jRoute"></ol>
     <div class="j-traits" id="jTraits" aria-label="성향"></div>
     <div class="j-prog" aria-hidden="true"><i id="jProg"></i></div>
@@ -84,13 +87,16 @@
     <button type="button" data-rot="1,0" aria-label="오른쪽으로 돌리기">⟳</button>
     <button type="button" data-rot="0,1" aria-label="아래로 기울이기">▼</button>
     <button type="button" data-reset aria-label="시점 처음으로">⌂</button>
+    <button type="button" id="fpv" class="fpv" aria-pressed="false" title="시점 고정: 구역 사이를 이동할 때 1인칭으로 보기">1인칭</button>
   </div>
 </div>
 
 <script src="js/data.js"></script>
 <script src="js/journey-data.js"></script>
+<script src="js/digi-info.js"></script>
 <script src="js/images-list.js"></script>
 <script src="js/images.js"></script>
+<script src="js/evolution.js"></script>
 <script src="js/network.js"></script>
 <script src="js/app.js"></script>
 </body>
