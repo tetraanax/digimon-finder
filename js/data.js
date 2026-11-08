@@ -5,7 +5,7 @@
    line: 성숙기 → 완전체 → 궁극체 진화 루트 ('?'는 건너뛰어요)
    img : 이미지 경로나 주소 (예: 'img/agumon.png'). 비워 두면 도트 알 그림이 나와요. */
 window.DIGI = [
-  {ko:'아구몬',en:'Agumon',attr:'vac',type:'파충류형',size:2,vibe:['brave','wild'],line:['그레이몬','메탈그레이몬','워그레이몬'],img:'',d:'배고프면 못 참고, 친구가 위험하면 더 못 참는 타입. 단순하지만 그래서 믿음직해요.'},
+  {ko:'아구몬',en:'Agumon',attr:'vac',type:'파충류형',size:2,vibe:['brave','wild'],line:['그레이몬','메탈그레이몬','워그레이몬'],img:'',d:'데이터가 바닥나면 못 참고, 친구가 위험하면 더 못 참는 타입. 단순하지만 그래서 믿음직해요.'},
   {ko:'파피몬',en:'Gabumon',attr:'dat',type:'파충류형',size:2,vibe:['calm','gentle'],line:['가루몬','워가루몬','메탈가루몬'],img:'',d:'수줍음이 많아 털가죽 뒤에 숨지만, 한번 마음을 열면 끝까지 곁을 지켜요.'},
   {ko:'피요몬',en:'Biyomon',attr:'vac',type:'새형',size:1,vibe:['gentle','wild'],line:['버드라몬','가루다몬','페닉스몬'],img:'',d:'밝고 수다스러워서 곁에 있으면 분위기가 금세 환해져요.'},
   {ko:'텐타몬',en:'Tentomon',attr:'vac',type:'곤충형',size:2,vibe:['clever','calm'],line:['캅테리몬','아트라캅테리몬','헤라클레스캅테리몬'],img:'',d:'궁금한 건 꼭 알아내야 직성이 풀리는 박식한 조언자예요.'},
@@ -31,6 +31,6 @@ window.DIGI = [
   {ko:'톱니몬',en:'Hagurumon',attr:'vir',type:'머신형',size:2,vibe:['clever','calm'],line:['가드로몬','안드로몬','하이안드로몬'],img:'',d:'톱니바퀴처럼 정확하고 논리적이에요. 계획 세우기의 달인.'},
   {ko:'루나몬',en:'Lunamon',attr:'dat',type:'포유류형',size:1,vibe:['gentle','calm'],line:['레키스몬','크레세몬','디아나몬'],img:'',d:'달빛을 닮은 섬세한 성격. 외로움을 잘 타지만 그만큼 정이 깊어요.'},
   {ko:'코로나몬',en:'Coronamon',attr:'vac',type:'짐승형',size:2,vibe:['brave','wild'],line:['파이라몬','플레어몬','아폴로몬'],img:'',d:'태양처럼 뜨거운 정의파. 불의를 보면 못 참아요.'},
-  {ko:'도루몬',en:'Dorumon',attr:'dat',type:'짐승형',size:2,vibe:['wild','brave'],line:['도루가몬','도루그레몬','알파몬'],img:'',d:'자유를 사랑하는 야생아. 먹을 것과 모험이라면 언제든 OK.'},
+  {ko:'도루몬',en:'Dorumon',attr:'dat',type:'짐승형',size:2,vibe:['wild','brave'],line:['도루가몬','도루그레몬','알파몬'],img:'',d:'자유를 사랑하는 야생아. 새로운 데이터와 모험이라면 언제든 OK.'},
   {ko:'코테몬',en:'Kotemon',attr:'dat',type:'파충류형',size:1,vibe:['brave','calm'],line:['다이노휴몬','?','?'],img:'',d:'수줍지만 수련에는 진지한 검도 소년. 묵묵히 실력을 쌓아요.'},
 ];
