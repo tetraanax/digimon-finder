@@ -1,5 +1,5 @@
 /* 진화 연출 — 데이터 증폭 폭발 (약 15초, 빠르게 모드에서는 3배 빠르게)
-   1) 콜아웃: 화면이 흔들리며 「○○몬 진화—!」 신호 띠가 가로로 쓸려 들어와요 (양 끝에 16진수 주소)
+   1) 시작: 화면이 한 번 흔들리고 데이터 줄기가 화면을 가로질러요
    2) 스캔: 스캔선이 몸을 훑고, 몸이 디지털 데이터로 읽혀요
    3) 분해: 그림의 실제 픽셀이 아래에서부터 떨어져 나와 데이터 입자가 돼요
    4) 증폭: 입자가 소용돌이 구체를 이루고, 박자마다 ×2 ×4 ×8 … 로 복제되며 폭발적으로 커져요
@@ -21,7 +21,6 @@
   };
   const MAX_PARTS = 5200;
   const TINT = { 'EVOLUTION': '#38bdf8', 'JOGRESS EVOLUTION': '#f472b6', 'CAPSULE EVOLUTION': '#facc15', 'SPECIAL EVOLUTION': '#a78bfa' };
-  const SHOUT = { 'EVOLUTION': '진화', 'JOGRESS EVOLUTION': '조그레스 진화', 'CAPSULE EVOLUTION': '아머 진화', 'SPECIAL EVOLUTION': '진화' };
   const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
   const prog = (t, a, b) => clamp((t - a) / (b - a));
   const lerp = (a, b, k) => a + (b - a) * k;
@@ -127,7 +126,7 @@
     live.textContent = `${from}${partner ? ' + ' + partner : ''} → ${to} 진화. ${desc}`;
     host.appendChild(live);
     const g = cv.getContext('2d');
-    const tint = TINT[kind] || TINT.EVOLUTION, shout = SHOUT[kind] || '진화';
+    const tint = TINT[kind] || TINT.EVOLUTION;
     const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
     const mbFrom = toMB(fromCap) || 1, mbTo = Math.max(toMB(cap) || mbFrom * 8, mbFrom * 2);
 
@@ -332,25 +331,6 @@
       g.save(); g.globalAlpha = a; g.strokeStyle = color; g.lineWidth = lw * dpr; g.shadowColor = color; g.shadowBlur = 10 * dpr; g.beginPath();
       [[x, y, 1, 1], [x + w, y, -1, 1], [x + w, y + h, -1, -1], [x, y + h, 1, -1]].forEach(([px, py, sx, sy]) => { g.moveTo(px + sx * L, py); g.lineTo(px, py); g.lineTo(px, py + sy * L); });
       g.stroke(); g.restore();
-    }
-    // 콜아웃: 가로로 곧게 들어오는 신호 띠 (양 끝에 16진수 주소)
-    function callBar(lines, p, out, y, size1, size2) {
-      const a = clamp(p) * (1 - clamp(out));
-      if (a <= 0) return;
-      const wipe = easeOut(clamp(p)), bandH = (size1 + size2 + 30) * dpr;
-      g.save(); g.globalAlpha = a;
-      g.beginPath(); g.rect(0, y - bandH, W * wipe + 2, bandH * 2); g.clip();
-      g.fillStyle = 'rgba(2,4,12,.85)'; g.fillRect(0, y - bandH / 2, W, bandH);
-      g.fillStyle = tint; g.fillRect(0, y - bandH / 2 - 3 * dpr, W, 2 * dpr); g.fillRect(0, y + bandH / 2 + dpr, W, 2 * dpr);
-      g.font = `${11 * dpr}px Silkscreen, monospace`; g.fillStyle = tint; g.textAlign = 'left';
-      g.fillText(`${ADDR} · PACKET ${byte(1, 2)}${byte(2, 7)}`, 18 * dpr, y - bandH / 2 + 18 * dpr);
-      g.textAlign = 'right'; g.fillText(`ROUTE ▸ ${byte(3, 1)}:${byte(4, 4)}:${byte(5, 8)}`, W - 18 * dpr, y + bandH / 2 - 10 * dpr);
-      g.textAlign = 'center';
-      if (lines[0]) { g.fillStyle = '#cbd5e1'; g.font = `${size1 * dpr}px "Do Hyeon", sans-serif`; g.fillText(lines[0], W / 2, y - bandH / 2 + (size1 + 8) * dpr); }
-      g.font = `${size2 * dpr}px "Do Hyeon", sans-serif`; g.shadowColor = tint; g.shadowBlur = 24 * dpr; g.fillStyle = '#ffffff';
-      g.fillText(lines[1], W / 2, y + bandH / 2 - 14 * dpr);
-      g.restore();
-      if (wipe < 1) { g.save(); g.globalCompositeOperation = 'lighter'; g.fillStyle = '#ffffff'; g.shadowColor = tint; g.shadowBlur = 20 * dpr; g.globalAlpha = a; g.fillRect(W * wipe - 2 * dpr, y - bandH / 2 - 6 * dpr, 4 * dpr, bandH + 12 * dpr); g.restore(); }
     }
     // 결과 화면의 이름: 왼쪽부터 쓸어 열리며, 색 번짐이 가라앉고, 위에서 아래로 흰색→속성색 그라데이션
     function title(text, x, y, fs, p, a) {
@@ -585,10 +565,6 @@
         if (fl > 0) { g.fillStyle = `rgba(255,255,255,${fl})`; g.fillRect(-60, -60, W + 120, H + 120); }
         const sfl = t >= T.slam ? .55 * (1 - prog(t, T.slam, T.slam + 260)) : 0;
         if (sfl > 0) { g.fillStyle = `rgba(255,255,255,${sfl})`; g.fillRect(-60, -60, W + 120, H + 120); }
-
-        // 콜아웃 신호 띠
-        const bigF = Math.min(78, W / dpr / 8), smallF = Math.min(26, W / dpr / 20);
-        callBar([partner ? `${from} + ${partner}` : from, `${shout}—!`], prog(t, T.call, T.call + 320), prog(t, T.callOut - 200, T.callOut + 50), H * .8, smallF, bigF);
 
         if (t >= T.slam) {
           const rA = fadeOut, vw = W / dpr;
