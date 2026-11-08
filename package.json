@@ -1,0 +1,9 @@
+{
+  "name": "digimon-finder",
+  "version": "1.0.0",
+  "private": true,
+  "description": "나의 파트너 디지몬 — 팬메이드 심리테스트",
+  "scripts": {
+    "start": "node server.js"
+  }
+}

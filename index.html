@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>나의 파트너 디지몬</title>
+  <meta name="description" content="성별·키·몸무게·나이·혈액형으로 나와 맞는 파트너 디지몬을 찾아 주는 팬메이드 심리테스트">
+  <meta property="og:title" content="나의 파트너 디지몬은?">
+  <meta property="og:description" content="디지털 네트워크를 추적해 나의 파트너를 찾아보세요.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Do+Hyeon&family=Gowun+Dodum&family=Silkscreen:wght@400;700&display=swap">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<main class="wrap">
+  <header>
+    <div class="eyebrow">PARTNER SCAN</div>
+    <h1>나의 파트너 디지몬은?</h1>
+    <p>성별, 키, 몸무게, 나이, 혈액형을 넣으면 디지털 네트워크를 추적해서 당신과 가장 잘 맞는 성장기 파트너를 찾아 드려요.</p>
+  </header>
+
+    <section class="panel">
+      <form id="f" novalidate>
+        <div class="field">
+          <span>성별</span>
+          <div class="seg">
+            <input type="radio" name="sex" id="sex-m" value="m" checked><label for="sex-m">남성</label>
+            <input type="radio" name="sex" id="sex-f" value="f"><label for="sex-f">여성</label>
+            <input type="radio" name="sex" id="sex-x" value="x"><label for="sex-x">밝히지 않음</label>
+          </div>
+        </div>
+        <div class="row">
+          <div class="field"><label for="h">키</label><div class="unit"><input id="h" type="number" inputmode="decimal" min="80" max="230" value="172"><em>cm</em></div></div>
+          <div class="field"><label for="w">몸무게</label><div class="unit"><input id="w" type="number" inputmode="decimal" min="15" max="250" value="66"><em>kg</em></div></div>
+          <div class="field"><label for="a">나이</label><div class="unit"><input id="a" type="number" inputmode="numeric" min="5" max="120" value="24"><em>세</em></div></div>
+        </div>
+        <div class="field">
+          <span>혈액형</span>
+          <div class="seg">
+            <input type="radio" name="bt" id="bt-a" value="A"><label for="bt-a">A형</label>
+            <input type="radio" name="bt" id="bt-b" value="B"><label for="bt-b">B형</label>
+            <input type="radio" name="bt" id="bt-o" value="O" checked><label for="bt-o">O형</label>
+            <input type="radio" name="bt" id="bt-ab" value="AB"><label for="bt-ab">AB형</label>
+          </div>
+        </div>
+        <p class="err" id="err" role="alert"></p>
+        <button class="go" type="submit">파트너 찾기</button>
+      </form>
+    </section>
+
+  <footer>팬이 만든 재미용 테스트예요. 결과에 과학적 근거는 없어요. 디지몬과 각 캐릭터의 이름에 관한 권리는 반다이·도에이 애니메이션에 있으며, 이 페이지는 공식과 관련이 없어요.</footer>
+</main>
+
+<div class="net" id="net" hidden>
+  <canvas id="netc" aria-hidden="true"></canvas>
+  <div class="net-top">DIGITAL NETWORK · PARTNER TRACE</div>
+  <div class="hud"><div class="stat" id="netStat" aria-live="polite"></div><button class="skip" id="netSkip" type="button">건너뛰기</button></div>
+  <aside class="journey" id="journey" hidden aria-label="여행 정보">
+    <div class="j-head">
+      <span class="j-stage" id="jStage">성장기</span>
+      <span class="j-pic" id="jPic" hidden></span>
+      <b id="jName"></b>
+      <span class="j-cap" id="jCap"></span>
+      <span class="j-moves" id="jMoves">이동 0</span>
+    </div>
+    <ol class="j-route" id="jRoute"></ol>
+    <div class="j-traits" id="jTraits" aria-label="성향"></div>
+    <div class="j-prog" aria-hidden="true"><i id="jProg"></i></div>
+    <ol class="j-log" id="jLog" aria-live="polite"></ol>
+    <div class="j-secret" id="jSecret"></div>
+    <div class="j-actions">
+      <button class="ghost small" id="jFast" type="button">빠르게 ▶▶</button>
+      <button class="ghost small" id="jEnd" type="button">여행 기록 보기</button>
+      <button class="ghost small" id="jHome" type="button">처음으로</button>
+    </div>
+  </aside>
+  <div class="stage"><section class="pcard" id="result" hidden aria-live="polite"></section></div>
+  <section class="choice" id="choice" hidden aria-live="polite" aria-label="행동 선택"></section>
+  <section class="toast" id="toast" hidden aria-live="polite" aria-label="방금 일어난 일"></section>
+  <div class="rot" id="rot" role="group" aria-label="화면 회전">
+    <button type="button" data-rot="-1,0" aria-label="왼쪽으로 돌리기">⟲</button>
+    <button type="button" data-rot="0,-1" aria-label="위로 기울이기">▲</button>
+    <button type="button" data-rot="1,0" aria-label="오른쪽으로 돌리기">⟳</button>
+    <button type="button" data-rot="0,1" aria-label="아래로 기울이기">▼</button>
+    <button type="button" data-reset aria-label="시점 처음으로">⌂</button>
+  </div>
+</div>
+
+<script src="js/data.js"></script>
+<script src="js/journey-data.js"></script>
+<script src="js/images-list.js"></script>
+<script src="js/images.js"></script>
+<script src="js/network.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

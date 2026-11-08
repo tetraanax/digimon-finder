@@ -1,0 +1,9 @@
+# Claude 작업 설정
+.claude/
+# 의존성·로그
+node_modules/
+*.log
+# OS 파일
+.DS_Store
+Thumbs.db
+desktop.ini
