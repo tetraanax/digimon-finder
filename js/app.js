@@ -178,6 +178,20 @@ function infoOf(name){
   if (/X$/.test(name)) { const b = infoOf(name.slice(0, -1)); return (b ? b + ' ' : '') + 'X항체를 얻어 본래의 힘이 한층 더 깨어난 모습이에요.'; }
   return '';
 }
+// 다음 진화 예상은 실루엣만: 흰 배경을 오려 낸 그림을 검게 칠해서 보여줘요 (이름은 숨겨요)
+const silCache = new Map(), silNames = [];
+const silTag = name => { const u = silCache.get(name); let i = silNames.indexOf(name); if (i < 0) i = silNames.push(name) - 1;
+  return `<span class="jp-sil" data-sil="${i}" aria-hidden="true">${u ? `<img src="${u}" alt="">` : u === null ? '?' : ''}</span>`; };
+function fillSil(root){
+  root.querySelectorAll('.jp-sil[data-sil]').forEach(el => {
+    const name = silNames[+el.dataset.sil]; if (silCache.has(name) || !window.evoCinematic) return;
+    window.evoCinematic.preload(name).then(c => {
+      let url = null; try { url = c ? c.black.toDataURL() : null; } catch (e) {}
+      silCache.set(name, url);
+      document.querySelectorAll(`.jp-sil[data-sil="${el.dataset.sil}"]`).forEach(x => { x.innerHTML = url ? `<img src="${url}" alt="">` : '?'; });
+    });
+  });
+}
 const picTag = (name, cls) => { const src = picOf(name); return src ? `<img class="${cls}" src="${esc(src)}" alt="${esc(name)}" loading="lazy">` : ''; };
 // 성향 점수: 데이터의 기본값(1~3)에 배율을 곱하고 약간의 운을 더해요. 최대 statMax
 const gain = (fx, scale) => fx ? Object.fromEntries(Object.entries(fx).map(([k, v]) => [k, v * scale + Math.floor(Math.random() * (scale / 2 + 1))])) : null;
@@ -266,7 +280,7 @@ function applyEvolution(evo){
 }
 async function playEvolution(evo, kind = 'EVOLUTION'){
   const me = J, cap = capacity(evo.name, evo.stage), from = J.form;
-  await window.evoCinematic.play({ from, to: evo.name, partner: evo.partner, desc: infoOf(evo.name), kind, label: [evo.label || evo.special || stageLabel(evo.stage), ATTR[attrOf(evo.name)][0]].join(' · '), cap, speed: () => NET.speed || 1, alive: () => J === me });
+  await window.evoCinematic.play({ from, to: evo.name, partner: evo.partner, desc: infoOf(evo.name), kind, fromCap: capacity(from, J.stage), label: [evo.label || evo.special || stageLabel(evo.stage), ATTR[attrOf(evo.name)][0]].join(' · '), cap, speed: () => NET.speed || 1, alive: () => J === me });
   if (J !== me) return;
   await NET.evolveFx({ label: evo.name, img: null, sub: `${kind} · ${evo.label || evo.special || stageLabel(evo.stage)} · ${cap}`, title: `${from}${ga(from)} ${evo.name}${ro(evo.name)} 진화!` });
   if (J !== me) return;
@@ -513,9 +527,10 @@ function renderJourney(){
   const nx = J.special ? null : JD.evolveNeed[J.stage];
   const found = JD.secrets.filter(d => NET.unlocked.has(NET.regionId(d.region)));
   const cands = nx ? evoCandidates(J.stage) : [];
-  const pred = cands.length ? `<div class="j-pred"><span class="jp-h">다음 진화 예상${cands.length > 1 ? ` · ${cands.length}개 중 하나` : ''}<em>${esc(cands[0].path)}</em></span><div class="jp-list">${cands.map(c => `<span class="jp">${picTag(c.name, 'jp-pic')}<b>${esc(c.name)}</b><i class="${ATTR[c.attr][1]}">${ATTR[c.attr][0]}</i></span>`).join('')}</div></div>` : '';
+  const pred = cands.length ? `<div class="j-pred"><span class="jp-h">다음 진화 예상${cands.length > 1 ? ` · ${cands.length}개 중 하나` : ''}<em>${esc(cands[0].path)}</em></span><div class="jp-list">${cands.map(c => `<span class="jp" title="아직 알 수 없는 디지몬">${silTag(c.name)}<b>???</b><i class="${ATTR[c.attr][1]}">${ATTR[c.attr][0]}</i></span>`).join('')}</div></div>` : '';
   $('jSecret').innerHTML = pred + (nx ? `<p class="j-next">다음 진화 조건 · <span class="${statTop() >= nx.top ? 'ok' : ''}">가장 높은 능력치 ${statTop()}/${nx.top}</span> · <span class="${statSum() >= nx.total ? 'ok' : ''}">합계 ${statSum()}/${nx.total}</span>${J.exp < nx.steps ? ` · <span>${nx.steps - J.exp}걸음 더</span>` : ''}</p>` : '') +
     (found.length ? `<p class="hint open" title="지도를 축소해서 찾아보세요">✦ 열린 숨겨진 구역 ${found.map(d => `<span class="zone">${esc(d.region)}</span>`).join('')}</p>` : '');
+  fillSil($('jSecret'));
   $('jEnd').disabled = J.busy;
   if (!infoEl.hidden) openInfo(Math.min(+infoEl.dataset.i, J.route.length - 1));   // 열려 있으면 새 정보로
 }

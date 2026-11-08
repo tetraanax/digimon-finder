@@ -702,13 +702,25 @@
       const F = Math.min(W, H) * lerp(1.05, .62, fpvNow), cxs = lerp(W / 2, (W - (this.viewInset || 0) * dpr) / 2, fpvNow), cys = H * lerp(.47, .64, fpvNow);
       const cr = Math.cos(this.rot), sr = Math.sin(this.rot), cp = Math.cos(this.pitch), sp = Math.sin(this.pitch), camD = this.camD;
       const ox = this.focus.x, oy = this.focus.y, oz = this.focus.z;
-      const PX = this.px, PY = this.py, PZ = this.pz, n = G.n, DK = Math.max(1, camD / 4800);
+      if (!this.qx || this.qx.length !== G.n) { this.qx = new Float32Array(G.n); this.qy = new Float32Array(G.n); }
+      const PX = this.px, PY = this.py, PZ = this.pz, QX = this.qx, QY = this.qy, n = G.n, DK = Math.max(1, camD / 4800);
       for (let i = 0; i < n; i++) {
         const x = G.X[i] - ox, y = G.Y[i] - oy, z = G.Z[i] - oz;
         const x1 = x * cr - z * sr, z1 = x * sr + z * cr;
         const y2 = y * cp - z1 * sp, z2 = y * sp + z1 * cp + camD;
-        PZ[i] = z2; if (z2 > 30) { const s = F / z2; PX[i] = cxs + x1 * s; PY[i] = cys + y2 * s; }
+        PZ[i] = z2; QX[i] = x1; QY[i] = y2; if (z2 > 30) { const s = F / z2; PX[i] = cxs + x1 * s; PY[i] = cys + y2 * s; }
       }
+      // 한쪽 끝이 카메라 뒤에 있는 선은 버리지 않고 화면 바로 앞(near 면)에서 잘라 그려요 — 1인칭에서 지나온 점과 이어진 선이 사라지지 않게
+      const NEAR = 31;
+      const clipEnd = (a, b) => { const k = (NEAR - PZ[a]) / (PZ[b] - PZ[a]), s = F / NEAR;
+        return [cxs + (QX[a] + (QX[b] - QX[a]) * k) * s, cys + (QY[a] + (QY[b] - QY[a]) * k) * s]; };
+      const seg = (a, b) => {
+        const fa = PZ[a] > 30, fb = PZ[b] > 30;
+        if (fa && fb) return [PX[a], PY[a], PX[b], PY[b]];
+        if (!fa && !fb) return null;
+        if (fa) { const c = clipEnd(b, a); return [PX[a], PY[a], c[0], c[1]]; }
+        const c = clipEnd(a, b); return [c[0], c[1], PX[b], PY[b]];
+      };
       const proj = (x, y, z) => { x -= ox; y -= oy; z -= oz; const x1 = x * cr - z * sr, z1 = x * sr + z * cr; const y2 = y * cp - z1 * sp, z2 = y * sp + z1 * cp + camD;
         if (z2 <= 30) return null; const s = F / z2; return [cxs + x1 * s, cys + y2 * s, z2]; };
       const onScreen = i => PZ[i] > 30 && PX[i] > -60 && PX[i] < W + 60 && PY[i] > -60 && PY[i] < H + 60;
@@ -729,10 +741,12 @@
       const E = G.E, buckets = new Array(PALETTE.length * 3);
       for (let e = 0; e < E.length; e += 2) {
         const a = E[e], b = E[e + 1];
-        if (PZ[a] <= 30 || PZ[b] <= 30) continue;
-        if ((PX[a] < 0 && PX[b] < 0) || (PX[a] > W && PX[b] > W) || (PY[a] < 0 && PY[b] < 0) || (PY[a] > H && PY[b] > H)) continue;
-        const zz = (PZ[a] + PZ[b]) * .5, lv = zz < 1200 * DK ? 2 : zz < 2800 * DK ? 1 : 0, key = G.C[a] * 3 + lv;
-        const p = buckets[key] || (buckets[key] = new Path2D()); p.moveTo(PX[a], PY[a]); p.lineTo(PX[b], PY[b]);
+        let x0, y0, x1, y1;
+        if (PZ[a] > 30 && PZ[b] > 30) { x0 = PX[a]; y0 = PY[a]; x1 = PX[b]; y1 = PY[b]; }
+        else { const q = seg(a, b); if (!q) continue; [x0, y0, x1, y1] = q; }
+        if ((x0 < 0 && x1 < 0) || (x0 > W && x1 > W) || (y0 < 0 && y1 < 0) || (y0 > H && y1 > H)) continue;
+        const zz = Math.max(30, (PZ[a] + PZ[b]) * .5), lv = zz < 1200 * DK ? 2 : zz < 2800 * DK ? 1 : 0, key = G.C[a] * 3 + lv;
+        const p = buckets[key] || (buckets[key] = new Path2D()); p.moveTo(x0, y0); p.lineTo(x1, y1);
       }
       // crisper links: brighter, and thicker the closer they are
       for (let k = 0; k < buckets.length; k++) if (buckets[k]) { const lv = k % 3;
@@ -741,13 +755,18 @@
       /* traced path */
       if (this.pathEdges.size) {
         const p = new Path2D();
-        this.pathEdges.forEach(key => { const a = Math.floor(key / n), b = key % n; if (PZ[a] > 30 && PZ[b] > 30) { p.moveTo(PX[a], PY[a]); p.lineTo(PX[b], PY[b]); } });
+        this.pathEdges.forEach(key => { const a = Math.floor(key / n), b = key % n; const q = seg(a, b); if (q) { p.moveTo(q[0], q[1]); p.lineTo(q[2], q[3]); } });
         g.globalAlpha = .35; g.strokeStyle = '#7dd3fc'; g.lineWidth = 7 * dpr; g.stroke(p);
         g.globalAlpha = 1; g.strokeStyle = '#ffffff'; g.lineWidth = 2 * dpr; g.stroke(p);
       }
       if (this.mode === 'trav') {
         const a = tr.path[Math.min(tr.reached, tr.hops)], hp = proj(fx, fy, fz);
-        if (hp && PZ[a] > 30) { g.globalAlpha = 1; g.strokeStyle = '#ffffff'; g.lineWidth = 2.4 * dpr; g.beginPath(); g.moveTo(PX[a], PY[a]); g.lineTo(hp[0], hp[1]); g.stroke(); }
+        if (hp) {
+          let sx = PX[a], sy = PY[a];
+          if (PZ[a] <= 30) { const k = (NEAR - PZ[a]) / (hp[2] - PZ[a]), s = F / NEAR, hx = (hp[0] - cxs) * hp[2] / F, hy = (hp[1] - cys) * hp[2] / F;
+            sx = cxs + (QX[a] + (hx - QX[a]) * k) * s; sy = cys + (QY[a] + (hy - QY[a]) * k) * s; }
+          g.globalAlpha = 1; g.strokeStyle = '#ffffff'; g.lineWidth = 2.4 * dpr; g.beginPath(); g.moveTo(sx, sy); g.lineTo(hp[0], hp[1]); g.stroke();
+        }
       }
 
       /* data pulses flowing through links */
