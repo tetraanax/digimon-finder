@@ -11,19 +11,6 @@
 
   const PALETTE = ['#22d3ee', '#f472b6', '#facc15', '#a3e635', '#fb923c', '#a78bfa', '#38bdf8', '#f43f5e', '#2dd4bf', '#e879f9',
     '#e2e8f0', '#6366f1', '#dc2626', '#94a3b8'];
-  const SHAPES = ['sphere', 'ring', 'spiral', 'grid', 'helix', 'burst', 'torus', 'cube',
-    'dna', 'galaxy', 'tree', 'crystal', 'knot', 'web', 'city', 'shell', 'flower', 'chain', 'nebula', 'pyramid', 'wave', 'atom', 'mobius', 'gear'];
-  // continents: cluster structures in order (cycled)
-  const CONTINENT_SHAPES = [
-    ['wave', 'shell', 'atom', 'knot'],      // 태평양: big waves and deep-sea shells
-    ['city', 'tree', 'gear', 'grid'],       // 아메리카: towers and machinery
-    ['chain', 'wave', 'knot', 'shell'],     // 대서양: undersea cables
-    ['crystal', 'web', 'pyramid', 'chain'], // 유럽: old castles and fine webs
-    ['tree', 'galaxy', 'burst', 'nebula'],  // 아프리카: great trees under a starry sky
-    ['flower', 'shell', 'atom', 'wave'],    // 인도양: coral and shells
-    ['pyramid', 'dna', 'flower', 'city'],   // 아시아: temples and dense cities
-    ['nebula', 'flower', 'ring', 'sphere'], // 오세아니아: reefs and islands
-  ];
   // world regions
   //  0–7  continents & oceans, laid out by direction around the center
   //  8–9  secret zones the app unlocks (태양계 above the world, 이그드라실 below)
@@ -36,45 +23,39 @@
   const OPEN_REGIONS = 8, SOLAR = 8, YGGDRASIL = 9;
   const SECRETS = new Set([SOLAR, YGGDRASIL]);
   const isSecret = k => SECRETS.has(k);
-  // special networks: [region, anchor x, y, z, shapes, scale]
-  const SPECIAL = [];   // filled by the layout below: [region, x, y, z, shapes, scale]
-  const SPECIAL_SHAPES = {
-    10: [['atom', 'gear', 'shell'], 1.15],    // 커널: the core at the center
-    11: [['dna', 'helix', 'nebula'], 1],      // 딥웹
-    12: [['nebula', 'knot', 'burst'], 1.2],   // 다크 에리어
-    13: [['mobius', 'burst', 'web'], 1],      // 디지털 해저드
-    14: [['mobius', 'shell', 'chain'], .95],  // 어나니머스
-  };
-  // more named networks scattered around the rim: [이름, EN, 색, 모양들]
+  // named networks: [region, anchor x, y, z, scale]
+  const SPECIAL = [];   // filled by the layout below
+  const SPECIAL_SCALE = { 10: 1.15, 11: 1, 12: 1.15, 13: 1.05, 14: 1 }; // 커널 · 딥웹 · 다크 에리어 · 디지털 해저드 · 어나니머스
+  // more named networks scattered around the rim: [이름, EN, 색]
   const EXTRA = [
-    ['파일 섬', 'FILE ISLAND', 3, ['flower', 'tree']],
-    ['서버 대륙', 'SERVER CONTINENT', 6, ['city', 'crystal']],
-    ['방화벽 요새', 'FIREWALL FORTRESS', 7, ['gear', 'pyramid']],
-    ['버그 정크야드', 'BUG JUNKYARD', 4, ['nebula', 'burst']],
-    ['캐시 사막', 'CACHE DESERT', 2, ['wave', 'pyramid']],
-    ['프록시 미궁', 'PROXY LABYRINTH', 5, ['crystal', 'knot']],
-    ['아카이브 도서관', 'ARCHIVE LIBRARY', 8, ['city', 'shell']],
-    ['바이러스 늪', 'VIRUS SWAMP', 12, ['nebula', 'torus']],
-    ['백신 성역', 'VACCINE SANCTUARY', 10, ['flower', 'atom']],
-    ['쿼리 협곡', 'QUERY CANYON', 4, ['wave', 'web']],
-    ['블록체인 산맥', 'BLOCKCHAIN RIDGE', 2, ['chain', 'crystal']],
-    ['클라우드 하늘섬', 'CLOUD ISLES', 6, ['nebula', 'sphere']],
-    ['양자 네트워크', 'QUANTUM NETWORK', 9, ['atom', 'knot']],
-    ['위성 궤도망', 'SATELLITE ORBIT', 0, ['atom', 'ring']],
-    ['레거시 서버 묘지', 'LEGACY GRAVEYARD', 13, ['city', 'cube']],
-    ['피싱 해역', 'PHISHING WATERS', 1, ['web', 'wave']],
-    ['다크웹 마켓', 'DARK MARKET', 11, ['crystal', 'burst']],
-    ['미러 서버', 'MIRROR SERVER', 10, ['mobius', 'shell']],
-    ['노이즈 폭풍지대', 'NOISE STORM', 9, ['galaxy', 'burst']],
-    ['코드 정글', 'CODE JUNGLE', 3, ['tree', 'dna']],
+    ['파일 섬', 'FILE ISLAND', 3],
+    ['서버 대륙', 'SERVER CONTINENT', 6],
+    ['방화벽 요새', 'FIREWALL FORTRESS', 7],
+    ['버그 정크야드', 'BUG JUNKYARD', 4],
+    ['캐시 사막', 'CACHE DESERT', 2],
+    ['프록시 미궁', 'PROXY LABYRINTH', 5],
+    ['아카이브 도서관', 'ARCHIVE LIBRARY', 8],
+    ['바이러스 늪', 'VIRUS SWAMP', 12],
+    ['백신 성역', 'VACCINE SANCTUARY', 10],
+    ['쿼리 협곡', 'QUERY CANYON', 4],
+    ['블록체인 산맥', 'BLOCKCHAIN RIDGE', 2],
+    ['클라우드 하늘섬', 'CLOUD ISLES', 6],
+    ['양자 네트워크', 'QUANTUM NETWORK', 9],
+    ['위성 궤도망', 'SATELLITE ORBIT', 0],
+    ['레거시 서버 묘지', 'LEGACY GRAVEYARD', 13],
+    ['피싱 해역', 'PHISHING WATERS', 1],
+    ['다크웹 마켓', 'DARK MARKET', 11],
+    ['미러 서버', 'MIRROR SERVER', 10],
+    ['노이즈 폭풍지대', 'NOISE STORM', 9],
+    ['코드 정글', 'CODE JUNGLE', 3],
   ];
-  // hidden networks the app unlocks (besides 태양계·이그드라실): [이름, EN, 색, 모양들]
+  // hidden networks the app unlocks (besides 태양계·이그드라실): [이름, EN, 색]
   const HIDDEN = [
-    ['어비스', 'ABYSS', 12, ['galaxy', 'nebula', 'knot']],
-    ['사성수 결계', 'FOUR HOLY BEASTS', 4, ['gear', 'flower', 'atom']],
-    ['올림포스 서버', 'OLYMPOS SERVER', 2, ['pyramid', 'city', 'ring']],
-    ['천사의 계단', 'ANGEL STAIRS', 10, ['dna', 'flower', 'shell']],
-    ['X 프로그램 격리구역', 'X-PROGRAM QUARANTINE', 11, ['mobius', 'crystal', 'burst']],
+    ['어비스', 'ABYSS', 12],
+    ['사성수 결계', 'FOUR HOLY BEASTS', 4],
+    ['올림포스 서버', 'OLYMPOS SERVER', 2],
+    ['천사의 계단', 'ANGEL STAIRS', 10],
+    ['X 프로그램 격리구역', 'X-PROGRAM QUARANTINE', 11],
   ];
   // layout: every region gets its own anchor, far enough apart to click easily
   //   kernel in the middle · continents on ring 1 · special + extra networks on rings 2 and 3
@@ -85,28 +66,379 @@
   {
     const r = mulberry(4242);
     for (let k = 0; k < OPEN_REGIONS; k++) { const a = k / OPEN_REGIONS * TAU + .2; CONTINENT_ANCHOR.push([Math.cos(a) * RING1, (k % 2 ? -1 : 1) * 1300 + (r() - .5) * 1800, Math.sin(a) * RING1]); }
-    SPECIAL.push([10, 0, 0, 0, ...SPECIAL_SHAPES[10]]);
+    SPECIAL.push([10, 0, 0, 0, SPECIAL_SCALE[10]]);
     const outer = [];
-    EXTRA.forEach(([ko, en, col, shapes]) => {
+    EXTRA.forEach(([ko, en, col]) => {
       const id = REGION_NAMES.length; REGION_NAMES.push(ko); REGION_EN.push(en); REGION_COLOR.push(col);
-      outer.push([id, shapes, .9]);
+      outer.push([id, .95]);
     });
     // spread the four named specials evenly through ring 2
-    [11, 12, 13, 14].forEach((id, k) => outer.splice(k * 3, 0, [id, ...SPECIAL_SHAPES[id]]));
+    [11, 12, 13, 14].forEach((id, k) => outer.splice(k * 3, 0, [id, SPECIAL_SCALE[id]]));
     const n2 = 12;
-    outer.forEach(([id, shapes, scale], k) => {
+    outer.forEach(([id, scale], k) => {
       const onTwo = k < n2, cnt = onTwo ? n2 : outer.length - n2, kk = onTwo ? k : k - n2;
       const a = kk / cnt * TAU + (onTwo ? 0 : Math.PI / cnt) + (r() - .5) * .12, rad = (onTwo ? RING2 : RING3) + (r() - .5) * 700;
-      SPECIAL.push([id, Math.cos(a) * rad, Math.sin(k * 2.1 + .7) * 3200 + (r() - .5) * 1800, Math.sin(a) * rad, shapes, scale]);
+      SPECIAL.push([id, Math.cos(a) * rad, Math.sin(k * 2.1 + .7) * 3200 + (r() - .5) * 1800, Math.sin(a) * rad, scale]);
     });
-    HIDDEN.forEach(([ko, en, col, shapes], k) => {
+    HIDDEN.forEach(([ko, en, col], k) => {
       const id = REGION_NAMES.length; REGION_NAMES.push(ko); REGION_EN.push(en); REGION_COLOR.push(col); SECRETS.add(id);
       const a = k / HIDDEN.length * TAU + .55;
-      SPECIAL.push([id, Math.cos(a) * RING4, (k % 2 ? -1 : 1) * (3600 + r() * 1600), Math.sin(a) * RING4, shapes, 1.35]);
+      SPECIAL.push([id, Math.cos(a) * RING4, (k % 2 ? -1 : 1) * (3600 + r() * 1600), Math.sin(a) * RING4, 1.3]);
     });
   }
   // node kinds
   const DOT = 0, SQUARE = 1, DIAMOND = 2, RING = 3, CROSS = 4, HUB = 5, RELAY = 6, DUST = 7;
+
+  /* ---------- 구역마다 하나뿐인 노드 구성 ----------
+     구역 이름으로 모양을 정해요. 비슷한 모양이 겹치지 않도록 구역마다 따로 만들었어요.
+     at(x, h, z, 종류): h는 위쪽이 + (화면 좌표는 y가 아래로 커져요). R은 구역 크기(약 600).
+     pts(개수, t => [x, h, z], 종류, 닫기): t는 0~1, 차례로 이어요. */
+  const SIG = {};
+  const sq4 = (f, w, d) => { const s = f * 4 | 0, u = f * 4 - s; return [[-w + 2 * w * u, -d], [w, -d + 2 * d * u], [w - 2 * w * u, d], [-w, d - 2 * d * u]][Math.min(3, s)]; };
+
+  SIG['태평양 네트워크'] = ({ at, R, r, J, link, pts }) => { // 말려 들어가는 거대한 파도, 물보라, 작은 섬들
+    const U = 18, V = 13, g = [], lip = t => { const vm = Math.PI * (.6 + 1.2 * t), rr = R * .62 * (1 - vm / (Math.PI * 2) * .6); return [vm, rr]; };
+    for (let i = 0; i < U; i++) { const t = i / (U - 1), x = (t - .5) * R * 2.6, [vm] = lip(t);
+      g.push(pts(V, s => { const v = s * vm, rr = R * .62 * (1 - v / (Math.PI * 2) * .6); return [x, -R * .3 + Math.sin(v) * rr, -Math.cos(v) * rr]; }, j => j === V - 1 ? RING : DOT)); }
+    for (let i = 1; i < U; i++) for (let j = 0; j < V; j++) link(g[i - 1][j], g[i][j]);
+    for (let i = 0; i < 44; i++) { const t = .35 + r() * .65, [vm, rr] = lip(t);
+      at((t - .5) * R * 2.6 + J() * 40, -R * .3 + Math.sin(vm) * rr + r() * R * .35, -Math.cos(vm) * rr + J() * R * .2, DOT); }
+    for (let k = 0; k < 4; k++) { const cx = J() * R * 1.1, cz = R * (.9 + r() * .5), s = R * (.08 + r() * .1), n = 8 + (r() * 5 | 0);
+      const ring = pts(n, t => { const a = t * 6.283, w = s * (.75 + .3 * Math.sin(a * 3 + k)); return [cx + Math.cos(a) * w, -R * .3, cz + Math.sin(a) * w]; }, SQUARE, true);
+      link(at(cx, -R * .3 + s * .9, cz, DIAMOND), ring[0]); }
+  };
+  SIG['아메리카 네트워크'] = ({ at, R, r, J, link, pts }) => { // 현수교와 강 건너 마천루
+    const L = R * 1.5, T = L * .6, H = R * 1.0, W = R * .16, N = 31, d0 = -R * .1;
+    const cab = x => { const a = Math.abs(x); return a <= T ? R * .2 + (H - R * .2) * (a / T) ** 2 : H - (H - d0) * (a - T) / (L - T); };
+    const deck = [-1, 1].map(s => pts(N, t => [(t - .5) * 2 * L, d0, s * W], SQUARE));
+    for (let i = 0; i < N; i += 2) link(deck[0][i], deck[1][i]);
+    [-1, 1].forEach((s, si) => { const c = pts(N, t => { const x = (t - .5) * 2 * L; return [x, cab(x), s * W]; }, i => i === 6 || i === 24 ? DIAMOND : DOT);
+      for (let i = 1; i < N - 1; i++) if (i !== 6 && i !== 24) link(c[i], deck[si][i]); });
+    for (const x of [-T, T]) { const legs = [-1, 1].map(s => pts(7, t => [x, -R * .55 + t * (H + R * .65), s * W], SQUARE));
+      for (const q of [2, 4, 6]) link(legs[0][q], legs[1][q]); }
+    for (let k = 0; k < 8; k++) { const x = L + R * (.12 + r() * .4), z = J() * R * .45, n = 3 + (r() * 5 | 0); pts(n, t => [x, d0 + t * R * .12 * n, z], q => q === n - 1 ? DIAMOND : SQUARE); }
+  };
+  SIG['대서양 네트워크'] = ({ at, R, r, J, link, pts }) => { // 바다 밑을 가로지르는 해저 케이블 다발과 중계기
+    const cables = [];
+    for (let c = 0; c < 7; c++) { const ph = r() * 6, z0 = (c - 3) * R * .17, amp = R * (.12 + r() * .15), fr = 1.2 + r() * 1.3;
+      cables.push(pts(44, t => [(t - .5) * R * 3, Math.sin(t * fr * 6.283 + ph) * amp - R * .2, z0 + Math.sin(t * 4 + c * 1.7) * R * .25], i => i % 7 === 3 ? RING : DOT)); }
+    for (let i = 3; i < 44; i += 7) for (let c = 1; c < 7; c++) if (r() < .5) link(cables[c - 1][i], cables[c][i]);
+    for (let i = 0; i < 40; i++) at(J() * R * 1.5, -R * .7 - r() * R * .1, J() * R * .9, r() < .5 ? DOT : CROSS);
+  };
+  SIG['유럽 네트워크'] = ({ at, R, link, chain, pts }) => { // 톱니 성벽과 원통 탑, 가운데 성채
+    const n = 8, RW = R * 1.05, base = -R * .35, top = R * .05, bottom = [], upper = [];
+    for (let k = 0; k < n; k++) for (let s = 0; s < 6; s++) { const a = k / n * 6.283 + .39 + s / 6 * (6.283 / n), x = Math.cos(a) * RW, z = Math.sin(a) * RW;
+      bottom.push(at(x, base, z, SQUARE)); upper.push(at(x, top + (s % 2 ? R * .07 : 0), z, s % 2 ? SQUARE : DOT)); }
+    chain(bottom, true); chain(upper, true); bottom.forEach((b, i) => { if (i % 2 === 0) link(b, upper[i]); });
+    const tower = (x, z, rad, h0, h1, rings) => { let prev = null;
+      for (let q = 0; q < rings; q++) { const hh = h0 + (h1 - h0) * q / (rings - 1), ring = pts(6, t => [x + Math.cos(t * 6.283) * rad, hh, z + Math.sin(t * 6.283) * rad], q === rings - 1 ? DIAMOND : SQUARE, true);
+        if (prev) ring.forEach((id, i) => link(id, prev[i])); prev = ring; }
+      const apex = at(x, h1 + rad * 2.2, z, RING); prev.forEach(id => link(apex, id)); };
+    for (let k = 0; k < n; k++) { const a = k / n * 6.283 + .39; tower(Math.cos(a) * RW, Math.sin(a) * RW, R * .1, base, top + R * .2, 4); }
+    tower(0, 0, R * .26, base, R * .75, 6); tower(R * .2, R * .1, R * .08, R * .75, R * 1.0, 2);
+  };
+  SIG['아프리카 네트워크'] = ({ at, R, r, J, link, pts }) => { // 굽이치는 강, 강가에 흩어진 무리, 우산 모양 아카시아
+    const river = s => [(s - .5) * R * 2.8, -R * .3, Math.sin(s * 7.5) * R * .35 + Math.sin(s * 3.1) * R * .2];
+    const banks = [-1, 1].map(s => pts(40, t => { const p = river(t); return [p[0], p[1], p[2] + s * R * .07]; }, DOT));
+    for (let h = 0; h < 15; h++) { const s = r(), p = river(s), side = r() < .5 ? 0 : 1, cx = p[0] + J() * R * .2, cz = p[2] + (side ? 1 : -1) * R * (.25 + r() * .6), c = at(cx, -R * .3, cz, RING);
+      link(c, banks[side][Math.round(s * 39)]);
+      const m = 5 + (r() * 8 | 0), sp = R * (.05 + r() * .09); for (let i = 0; i < m; i++) link(c, at(cx + J() * sp, -R * .3 + r() * sp * .4, cz + J() * sp, r() < .5 ? DOT : CROSS)); }
+    for (let t = 0; t < 3; t++) { const x = J() * R, z = (r() < .5 ? -1 : 1) * R * (.75 + r() * .4), h0 = -R * .3, top = h0 + R * (.45 + r() * .2);
+      const trunk = pts(4, s => [x + s * R * .04, h0 + (top - h0) * s, z], SQUARE);
+      const crown = pts(10, s => [x + R * .04 + Math.cos(s * 6.283) * R * .3, top + Math.sin(s * 12.566) * R * .02, z + Math.sin(s * 6.283) * R * .13], DIAMOND, true);
+      crown.forEach((c, i) => { if (i % 3 === 0) link(trunk[3], c); }); }
+  };
+  SIG['인도양 네트워크'] = ({ at, R, r, J, link, fib, near }) => { // 바닥에서 자라는 산호 부채와 뇌산호
+    const floor = []; for (let i = 0; i < 26; i++) { const a = r() * 6.283, d = R * 1.3 * Math.sqrt(r()); floor.push(at(Math.cos(a) * d, -R * .45, Math.sin(a) * d, DOT)); } near(floor, 2);
+    for (let f = 0; f < 7; f++) { const a = r() * 6.283, d = R * (.2 + r() * 1.0), bx = Math.cos(a) * d, bz = Math.sin(a) * d, pa = r() * 3.14, ux = Math.cos(pa), uz = Math.sin(pa), sc = R * (.18 + r() * .14);
+      const grow = (from, x, h, ang, len, depth) => { const nx = x + Math.sin(ang) * len, nh = h + Math.cos(ang) * len, id = at(bx + ux * nx, nh, bz + uz * nx, depth ? DOT : DIAMOND); link(from, id);
+        if (depth) for (const s of [-1, 1]) grow(id, nx, nh, ang + s * (.3 + r() * .4), len * .75, depth - 1); };
+      grow(at(bx, -R * .45, bz, SQUARE), 0, -R * .45, J() * .2, sc, 4); }
+    for (let b = 0; b < 5; b++) { const a = r() * 6.283, d = R * (.3 + r() * .9); near(fib(18, Math.cos(a) * d, -R * .42, Math.sin(a) * d, R * (.07 + r() * .07), RING, .6), 2); }
+  };
+  SIG['아시아 네트워크'] = ({ at, R, r, link, pts }) => { // 처마 끝이 들린 층탑과 둘레의 작은 탑들
+    const sq = (x, h, z, w, k) => pts(4, t => { const a = t * 6.283 + .785; return [x + Math.cos(a) * w, h, z + Math.sin(a) * w]; }, k, true);
+    const pagoda = (x, z, s, tiers) => { let h = -R * .4, low = sq(x, h, z, s * .75, SQUARE);
+      for (let k = 0; k < tiers; k++) { const w = s * (1 - k * .13); h += s * .5;
+        const up = sq(x, h, z, w * .75, SQUARE); up.forEach((id, i) => link(id, low[i]));
+        const roof = pts(8, t => { const i = Math.round(t * 8), a = t * 6.283 + .785, c = i % 2 === 0; return [x + Math.cos(a) * w * (c ? 1.7 : 1.1), h + (c ? s * .16 : -s * .02), z + Math.sin(a) * w * (c ? 1.7 : 1.1)]; }, i => i % 2 ? DOT : DIAMOND, true);
+        up.forEach((id, i) => link(id, roof[i * 2])); low = up; }
+      const spire = pts(5, t => [x, h + t * s * .9, z], RING); low.forEach(id => link(id, spire[0])); };
+    pagoda(0, 0, R * .32, 6);
+    for (let k = 0; k < 4; k++) { const a = k / 4 * 6.283 + r(), d = R * (.85 + r() * .4); pagoda(Math.cos(a) * d, Math.sin(a) * d, R * (.1 + r() * .07), 2 + (r() * 2 | 0)); }
+  };
+  SIG['오세아니아 네트워크'] = ({ at, R, r, J, link, pts }) => { // 바다에 흩뿌려진 크고 작은 섬들과 뱃길
+    const isl = [];
+    for (let k = 0; k < 20; k++) { let x, z, tries = 0;
+      do { const a = r() * 6.283, d = R * 1.4 * Math.sqrt(r()); x = Math.cos(a) * d; z = Math.sin(a) * d; } while (++tries < 30 && isl.some(q => Math.hypot(q.x - x, q.z - z) < R * .28));
+      const s = R * (.04 + r() ** 2 * .16), n = 6 + (s / R * 40 | 0), ph = r() * 6;
+      const ring = pts(n, t => { const a = t * 6.283, w = s * (1 + .35 * Math.sin(a * 3 + ph) + J() * .12); return [x + Math.cos(a) * w, -R * .2, z + Math.sin(a) * w]; }, SQUARE, true);
+      const peak = at(x, -R * .2 + s * (.4 + r() * .8), z, DIAMOND); for (let i = 0; i < n; i += 3) link(peak, ring[i]); isl.push({ x, z, id: ring[0] }); }
+    for (let k = 0; k < 9; k++) { const a = isl[r() * isl.length | 0], b = isl[r() * isl.length | 0]; if (a === b) continue;
+      const route = pts(5, t => [a.x + (b.x - a.x) * t, -R * .2 + Math.sin(t * 3.14) * R * .05, a.z + (b.z - a.z) * t], DOT); link(a.id, route[0]); link(route[4], b.id); }
+  };
+  SIG['커널'] = ({ R, link, pts, fib, near, closest, hub }) => { // 겹겹이 싸인 기하 껍질 — 세계의 중심
+    const a = fib(14, 0, 0, 0, R * .3, DIAMOND), b = fib(44, 0, 0, 0, R * .65, SQUARE), c = fib(110, 0, 0, 0, R * 1.0, DOT);
+    near(a, 3); near(b, 3); near(c, 3); a.forEach(id => { link(hub, id); link(id, closest(id, b)); }); b.forEach((id, i) => { if (i % 2 === 0) link(id, closest(id, c)); });
+    pts(48, t => [Math.cos(t * 6.283) * R * 1.35, 0, Math.sin(t * 6.283) * R * 1.35], i => i % 6 ? DOT : RING, true);
+  };
+  SIG['딥웹 네트워크'] = ({ at, R, link, chain, pts }) => { // 끝없이 내려가는 나선 계단과 가운데 기둥
+    const N = 84, inner = [], outer = [];
+    for (let i = 0; i < N; i++) { const t = i / (N - 1), a = t * 6.283 * 4.5, rad = R * (1.05 - t * .7), h = R * (.85 - t * 2.0);
+      outer.push(at(Math.cos(a) * rad, h, Math.sin(a) * rad, i % 4 ? SQUARE : DIAMOND)); inner.push(at(Math.cos(a) * rad * .55, h, Math.sin(a) * rad * .55, DOT)); link(outer[i], inner[i]); }
+    chain(outer); chain(inner); pts(14, t => [0, R * (.9 - t * 2.1), 0], RING);
+  };
+  SIG['다크 에리어'] = ({ at, R, r, J, link }) => { // 흩어진 점들과 제멋대로 뻗은 선 — 혼돈
+    const blobs = [...Array(4)].map(() => [J() * R * .8, J() * R * .4, J() * R * .8, R * (.3 + r() * .4)]), ids = [];
+    for (let i = 0; i < 190; i++) { const b = blobs[r() * 4 | 0], g = () => (r() + r() + r() - 1.5) * b[3];
+      ids.push(at(b[0] + g(), b[1] + g() * .7, b[2] + g(), r() < .7 ? DOT : r() < .5 ? CROSS : DIAMOND)); }
+    for (let i = 0; i < ids.length; i++) if (r() < .55) link(ids[i], ids[r() * ids.length | 0]);
+  };
+  SIG['디지털 해저드'] = ({ at, R, link, chain, pts }) => { // 세 날개 경고 표식과 이를 두른 경고 삼각형
+    for (const z of [-R * .06, R * .06]) {
+      pts(12, t => [Math.cos(t * 6.283) * R * .16, Math.sin(t * 6.283) * R * .16, z], RING, true);
+      for (let b = 0; b < 3; b++) { const a0 = b / 3 * 6.283 + Math.PI / 2 - Math.PI / 6, arcs = [];
+        for (const rad of [R * .3, R * .6, R * .9, R * 1.15]) arcs.push(pts(9, t => { const a = a0 + t * Math.PI / 3; return [Math.cos(a) * rad, Math.sin(a) * rad, z]; }, rad > R ? DIAMOND : SQUARE));
+        for (let i = 1; i < arcs.length; i++) { link(arcs[i - 1][0], arcs[i][0]); link(arcs[i - 1][8], arcs[i][8]); } } }
+    const C = [0, 1, 2].map(k => { const a = -Math.PI / 2 + k / 3 * 6.283; return [Math.cos(a) * R * 1.65, -Math.sin(a) * R * 1.65]; }), tri = [];
+    for (let k = 0; k < 3; k++) { const p = C[k], q = C[(k + 1) % 3]; for (let i = 0; i < 14; i++) { const t = i / 14; tri.push(at(p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t, 0, i ? DOT : DIAMOND)); } }
+    chain(tri, true);
+  };
+  SIG['어나니머스 네트워크'] = ({ at, R, r, J, link, pts }) => { // 얼굴 없는 가면들이 가운데를 바라보며 흩어져 서 있어요
+    for (let m = 0; m < 34; m++) { const a = r() * 6.283, d = R * (.35 + r() * 1.0), x = Math.cos(a) * d, z = Math.sin(a) * d, h = J() * R * .6, s = R * (.1 + r() * .05), fx = -Math.sin(a), fz = Math.cos(a);
+      const face = pts(9, t => { const q = t * 6.283; return [x + fx * Math.cos(q) * s * .72, h + Math.sin(q) * s * (q > Math.PI ? 1.25 : 1), z + fz * Math.cos(q) * s * .72]; }, DOT, true);
+      link(face[2], at(x + fx * s * .3, h + s * .15, z + fz * s * .3, CROSS)); link(face[1], at(x - fx * s * .3, h + s * .15, z - fz * s * .3, CROSS)); }
+  };
+  SIG['파일 섬'] = ({ at, R, r, J, link, pts }) => { // 분화구가 있는 화산섬과 바닷가의 야자수
+    const RG = 7, SP = 18, g = [];
+    for (let i = 0; i < RG; i++) { const rho = R * (.12 + i / (RG - 1) * 1.15), hh = -R * .4 + R * .95 * Math.exp(-((rho / (R * .5)) ** 2)) - (i === 0 ? R * .3 : 0);
+      g.push(pts(SP, t => { const a = t * 6.283; return [Math.cos(a) * rho * (1 + J() * .05), hh + J() * R * .02, Math.sin(a) * rho]; }, i === RG - 1 ? SQUARE : DOT, true)); }
+    for (let i = 1; i < RG; i++) for (let j = 0; j < SP; j += 2) link(g[i - 1][j], g[i][j]);
+    for (let p = 0; p < 6; p++) { const a = r() * 6.283, rho = R * (1.05 + r() * .2), x = Math.cos(a) * rho, z = Math.sin(a) * rho, h0 = -R * .38;
+      const tr = pts(5, t => [x + t * t * R * .1, h0 + t * R * .4, z], SQUARE);
+      for (let f = 0; f < 5; f++) { const fa = f / 5 * 6.283; link(tr[4], pts(3, t => [x + R * .1 + Math.cos(fa) * (t + .3) * R * .14, h0 + R * .4 - t * t * R * .1, z + Math.sin(fa) * (t + .3) * R * .14], DIAMOND)[0]); } }
+  };
+  SIG['서버 대륙'] = ({ at, R, link, box }) => { // 통로를 사이에 두고 줄지어 선 서버 랙
+    const rows = 4, per = 6, w = R * .11, d = R * .07, hh = R * .6, h0 = -R * .35, tops = [];
+    for (let i = 0; i < rows; i++) for (let j = 0; j < per; j++) { const x = (j - (per - 1) / 2) * w * 2.3, z = (i - (rows - 1) / 2) * R * .5, c = box(x, h0, z, w, hh, d, SQUARE);
+      for (const f of [.25, .5, .75]) { const a = at(x - w, h0 + hh * f, z - d, DOT), b = at(x + w, h0 + hh * f, z - d, f === .5 ? DIAMOND : DOT); link(a, b); link(a, c[0]); }
+      tops.push(c[4]); }
+    for (let i = 0; i < rows; i++) for (let j = 1; j < per; j++) link(tops[i * per + j - 1], tops[i * per + j]);
+    for (let i = 1; i < rows; i++) link(tops[(i - 1) * per], tops[i * per]);
+  };
+  SIG['방화벽 요새'] = ({ at, R, r, J, link, pts }) => { // 휘어진 벽돌 방화벽과 그 위에서 일렁이는 불꽃
+    const C = 7, N = 26, RW = R * 1.1, a0 = -1.9, a1 = 1.9, rows = [], hOf = c => -R * .45 + c * R * .14;
+    for (let c = 0; c < C; c++) { const off = c % 2 ? .5 / (N - 1) : 0; rows.push(pts(N, t => { const a = a0 + (a1 - a0) * Math.min(1, t + off); return [Math.cos(a) * RW, hOf(c), Math.sin(a) * RW]; }, SQUARE)); }
+    for (let c = 1; c < C; c++) for (let i = c % 2; i < N; i += 2) link(rows[c - 1][i], rows[c][i]);
+    for (let f = 0; f < 16; f++) { const i = r() * N | 0, a = a0 + (a1 - a0) * i / (N - 1), h0 = hOf(C - 1), ht = R * (.2 + r() * .15);
+      link(rows[C - 1][i], pts(4, t => [Math.cos(a) * RW + J() * R * .04, h0 + (t + .25) * ht, Math.sin(a) * RW + J() * R * .04], q => q === 3 ? DIAMOND : DOT)[0]); }
+  };
+  SIG['버그 정크야드'] = ({ at, R, r, J, link, box }) => { // 아무렇게나 쌓아 올린 뾰족한 고철 산과 반쯤 묻힌 상자들
+    for (let k = 0; k < 6; k++) { const a = k / 6 * 6.283 + r(), d = R * (k ? .55 + r() * .6 : 0), cx = Math.cos(a) * d, cz = Math.sin(a) * d, s = R * (k ? .22 + r() * .14 : .4), tall = 1.6 + r() * .9;
+      const pick = () => { const q = r() * 6.283, w = s * Math.sqrt(r()); return [cx + Math.cos(q) * w, -R * .45 + (s - w) * tall, cz + Math.sin(q) * w]; };
+      for (let i = 0; i < 24; i++) { const p = pick(), len = s * (.25 + r() * .45), ang = r() * 6.283, tilt = J() * 1.2;
+        link(at(p[0], p[1], p[2], r() < .5 ? CROSS : SQUARE), at(p[0] + Math.cos(ang) * len, p[1] + tilt * len * .5, p[2] + Math.sin(ang) * len, r() < .5 ? DOT : DIAMOND)); } }
+    for (let k = 0; k < 7; k++) { const a = r() * 6.283, d = R * (.4 + r() * .9), w = R * (.05 + r() * .06); box(Math.cos(a) * d, -R * .45 - w * .4, Math.sin(a) * d, w * 1.4, w * 1.2, w, SQUARE); }
+  };
+  SIG['캐시 사막'] = ({ at, R, r, J, link, pts }) => { // 바람에 깎인 초승달 모래언덕들
+    for (let k = 0; k < 6; k++) { const a = r() * 6.283, d = R * 1.1 * Math.sqrt(r()), cx = Math.cos(a) * d, cz = Math.sin(a) * d, s = R * (.22 + r() * .25);
+      const crest = pts(15, t => { const q = (t - .5) * 2.8; return [cx - Math.cos(q) * s, -R * .4 + s * .45 * Math.cos(q) ** 2, cz + Math.sin(q) * s * 1.2]; }, i => i === 7 ? DIAMOND : DOT);
+      for (let i = 1; i < 14; i += 2) { const q = (i / 14 - .5) * 2.8; link(crest[i], at(cx - Math.cos(q) * s * 1.6, -R * .4, cz + Math.sin(q) * s * 1.5, DOT)); } }
+    for (let i = 0; i < 25; i++) at(J() * R * 1.4, -R * .4, J() * R * 1.4, CROSS);
+  };
+  SIG['프록시 미궁'] = ({ at, R, r, link }) => { // 진짜로 길을 찾아야 하는 두 겹 벽의 미로
+    const n = 9, sp = R * 2.5 / n, lo = [], hi = [], vis = new Set([0]), open = new Set(), st = [0];
+    const key = (a, b) => a < b ? a + ':' + b : b + ':' + a;
+    while (st.length) { const c = st[st.length - 1], cx = c % n, cy = c / n | 0, nb = [];
+      if (cx > 0) nb.push(c - 1); if (cx < n - 1) nb.push(c + 1); if (cy > 0) nb.push(c - n); if (cy < n - 1) nb.push(c + n);
+      const un = nb.filter(q => !vis.has(q)); if (!un.length) { st.pop(); continue; }
+      const q = un[r() * un.length | 0]; open.add(key(c, q)); vis.add(q); st.push(q); }
+    const M1 = n + 1, L = (i, j, top) => (top ? hi : lo)[i * M1 + j];
+    for (let i = 0; i < M1; i++) for (let j = 0; j < M1; j++) { const x = (i - n / 2) * sp, z = (j - n / 2) * sp; lo.push(at(x, -R * .3, z, SQUARE)); hi.push(at(x, -R * .3 + sp * .45, z, DOT)); }
+    const wall = (a, b, c, d) => { link(a, b); link(c, d); };
+    for (let i = 0; i <= n; i++) for (let j = 0; j < n; j++) if ((i === 0 || i === n || !open.has(key(j * n + i - 1, j * n + i))) && !(i === 0 && j === 0) && !(i === n && j === n - 1)) wall(L(i, j), L(i, j + 1), L(i, j, 1), L(i, j + 1, 1));
+    for (let j = 0; j <= n; j++) for (let i = 0; i < n; i++) if (j === 0 || j === n || !open.has(key((j - 1) * n + i, j * n + i))) wall(L(i, j), L(i + 1, j), L(i, j, 1), L(i + 1, j, 1));
+    for (let k = 0; k < lo.length; k++) link(lo[k], hi[k]);
+  };
+  SIG['아카이브 도서관'] = ({ at, R, link, pts, near }) => { // 층층이 둥근 서가와 꼭대기의 돔
+    const floors = 4, posts = 28, RR = R * .95, fh = R * .28; let prev = null;
+    for (let f = 0; f <= floors; f++) { const h = -R * .55 + f * fh, ring = pts(posts, t => [Math.cos(t * 6.283) * RR, h, Math.sin(t * 6.283) * RR], f % floors === 0 ? DIAMOND : SQUARE, true);
+      if (prev) ring.forEach((id, i) => { if (i % 2 === 0) link(id, prev[i]); });
+      if (f && f < floors) pts(posts / 2, t => [Math.cos(t * 6.283) * RR * .6, h, Math.sin(t * 6.283) * RR * .6], DOT, true).forEach((id, i) => link(id, ring[i * 2]));
+      prev = ring; }
+    const top = -R * .55 + floors * fh, dome = [];
+    for (let i = 0; i < 44; i++) { const y = i / 44, q = Math.sqrt(1 - y * y), th = i * 2.39996; dome.push(at(Math.cos(th) * q * RR, top + y * RR * .7, Math.sin(th) * q * RR, i % 6 ? DOT : RING)); }
+    near(dome, 2);
+  };
+  SIG['바이러스 늪'] = ({ at, R, r, link, fib, near }) => { // 질척한 바닥에서 크고 작은 거품이 피어올라요
+    const mud = []; for (let i = 0; i < 70; i++) { const a = r() * 6.283, d = R * 1.35 * Math.sqrt(r()); mud.push(at(Math.cos(a) * d, -R * .45 + Math.sin(d * .02 + a * 3) * R * .04, Math.sin(a) * d * .8, r() < .8 ? DOT : CROSS)); }
+    near(mud, 2);
+    for (let b = 0; b < 16; b++) { const a = r() * 6.283, d = R * 1.1 * Math.sqrt(r()), rise = r(), rad = R * (.2 - rise * .14) * (.6 + r() * .6);
+      near(fib(8 + (rad / R * 80 | 0), Math.cos(a) * d, -R * .4 + rise * R * 1.3, Math.sin(a) * d * .8, rad, RING), 2); }
+  };
+  SIG['백신 성역'] = ({ at, R, link, pts }) => { // 겹겹의 별 문양, 가운데 빛기둥, 둘레의 십자 표식
+    const star = (n, k, rad, h, kind) => { const ids = []; for (let i = 0; i < n; i++) { const a = i / n * 6.283; ids.push(at(Math.cos(a) * rad, h, Math.sin(a) * rad, kind)); } for (let i = 0; i < n; i++) link(ids[i], ids[(i + k) % n]); };
+    star(16, 7, R * 1.3, -R * .3, DIAMOND); star(12, 5, R * .95, -R * .2, SQUARE); star(8, 3, R * .62, -R * .1, DIAMOND); star(6, 2, R * .32, 0, RING);
+    pts(12, t => [0, -R * .3 + t * R * 1.5, 0], i => i % 3 ? DOT : RING);
+    for (let i = 0; i < 8; i++) { const a = i / 8 * 6.283 + .2, x = Math.cos(a) * R * 1.6, z = Math.sin(a) * R * 1.6, tx = -Math.sin(a) * R * .08, tz = Math.cos(a) * R * .08;
+      const bar = pts(4, t => [x, -R * .3 + t * R * .32, z], CROSS); link(bar[2], at(x + tx, -R * .3 + R * .21, z + tz, DOT)); link(bar[2], at(x - tx, -R * .3 + R * .21, z - tz, DOT)); }
+  };
+  SIG['쿼리 협곡'] = ({ at, R, r, J, link, pts, closest }) => { // 층층이 깎인 두 절벽, 바닥의 강, 위를 잇는 줄다리
+    const N = 16, layers = 6, side = [[], []], mid = t => Math.sin(t * 4) * R * .2;
+    [-1, 1].forEach((s, si) => { for (let l = 0; l < layers; l++) { const h = -R * .6 + l * R * .22;
+      side[si].push(pts(N, t => [(t - .5) * R * 2.8, h, mid(t) + s * (R * .18 + l * R * .1 + Math.sin(t * 9 + s) * R * .06 + J() * R * .02)], l === layers - 1 ? DIAMOND : SQUARE)); } });
+    for (const sd of side) for (let l = 1; l < layers; l++) for (let i = 0; i < N; i += 3) link(sd[l - 1][i], sd[l][i]);
+    pts(26, t => [(t - .5) * R * 2.8, -R * .66, mid(t)], i => i % 5 ? DOT : RING);
+    for (let b = 0; b < 4; b++) { const t = .1 + r() * .8, x = (t - .5) * R * 2.8, w = R * .78, h = -R * .6 + (layers - 1) * R * .22;
+      const br = pts(7, u => [x, h - Math.sin(u * Math.PI) * R * .1, mid(t) + (u - .5) * 2 * w], DOT); link(br[0], closest(br[0], side[0][layers - 1])); link(br[6], closest(br[6], side[1][layers - 1])); }
+  };
+  SIG['블록체인 산맥'] = ({ R, J, link, box }) => { // 서로 이어진 블록이 들쭉날쭉한 산등성이를 이뤄요
+    const N = 17, s = R * .075; let prev = null;
+    for (let i = 0; i < N; i++) { const t = i / (N - 1), x = (t - .5) * R * 2.8, peak = Math.abs(Math.sin(t * 7.3)) * R * .7 + Math.sin(t * 3.1) * R * .25 + R * .1, z = Math.sin(t * 5) * R * .3;
+      const c = box(x, -R * .45 + peak, z, s, s * 2, s, i % 4 ? SQUARE : DIAMOND);
+      if (prev) { link(prev[5], c[0]); link(prev[6], c[3]); } prev = c;
+      for (let k = 1; k * s * 2.6 < peak; k += 2) box(x + J() * s, -R * .45 + peak - k * s * 2.6, z + J() * s, s * .8, s * 1.6, s * .8, DOT); }
+  };
+  SIG['클라우드 하늘섬'] = ({ at, R, r, J, link, pts, fib, near }) => { // 하늘에 뜬 거꾸로 된 원뿔 섬, 떨어지는 폭포, 구름
+    for (let k = 0; k < 7; k++) { const a = r() * 6.283, d = R * (k ? .6 + r() * .75 : 0), x = Math.cos(a) * d, z = Math.sin(a) * d, h = k ? J() * R * .55 : R * .1, s = R * (k ? .12 + r() * .14 : .3);
+      const rim = pts(12, t => [x + Math.cos(t * 6.283) * s, h, z + Math.sin(t * 6.283) * s * .9], SQUARE, true);
+      const apex = at(x + J() * s * .2, h - s * 1.3, z, DIAMOND); rim.forEach((id, i) => { if (i % 2 === 0) link(id, apex); });
+      link(rim[0], pts(6, t => [x + s, h - t * R * .5, z], DOT)[0]);
+      if (r() < .7) near(fib(10, x + J() * s, h + s * .4, z + J() * s, s * .4, RING), 2); }
+  };
+  SIG['양자 네트워크'] = ({ at, R, r, J, link, pts, near }) => { // 세 축으로 뻗은 확률 구름 엽, 가운데 고리, 얽힌 입자쌍
+    for (let ax = 0; ax < 3; ax++) for (const sg of [1, -1]) { const ids = [];
+      while (ids.length < 32) { const d = [J(), J(), J()], m = Math.hypot(d[0], d[1], d[2]) || 1; for (let q = 0; q < 3; q++) d[q] /= m;
+        const c = d[ax] * sg; if (c < .2) continue; const rr = R * 1.15 * c * c; ids.push(at(d[0] * rr, d[1] * rr, d[2] * rr, ids.length % 5 ? DOT : RING)); }
+      near(ids, 2); }
+    pts(30, t => [Math.cos(t * 6.283) * R * .42, 0, Math.sin(t * 6.283) * R * .42], DIAMOND, true);
+    for (let k = 0; k < 7; k++) { const d = [J(), J(), J()], m = Math.hypot(d[0], d[1], d[2]) || 1, rr = R * (1.2 + r() * .3) / m; link(at(d[0] * rr, d[1] * rr, d[2] * rr, CROSS), at(-d[0] * rr, -d[1] * rr, -d[2] * rr, CROSS)); }
+  };
+  SIG['위성 궤도망'] = ({ at, R, r, J, link, fib, near }) => { // 행성 둘레를 도는 위성들과 점선 궤도
+    const planet = fib(70, 0, 0, 0, R * .42, DOT); near(planet, 3);
+    for (let o = 0; o < 7; o++) { const rad = R * (.75 + o * .11), inc = J() * 1.1, nd = r() * 6.283, n = 34;
+      const P3 = t => { const a = t * 6.283, x0 = Math.cos(a) * rad, z0 = Math.sin(a) * rad, y = z0 * Math.sin(inc), z1 = z0 * Math.cos(inc); return [x0 * Math.cos(nd) - z1 * Math.sin(nd), y, x0 * Math.sin(nd) + z1 * Math.cos(nd)]; };
+      const ids = []; for (let i = 0; i < n; i++) { const p = P3(i / n); ids.push(at(p[0], p[1], p[2], DOT)); } for (let i = 0; i < n; i += 2) link(ids[i], ids[(i + 1) % n]);
+      for (let s = 0; s < 1 + (r() < .5 ? 1 : 0); s++) { const p = P3(r()), body = at(p[0], p[1], p[2], SQUARE);
+        link(body, at(p[0] + R * .07, p[1], p[2], DIAMOND)); link(body, at(p[0] - R * .07, p[1], p[2], DIAMOND)); if (r() < .6) link(body, planet[r() * planet.length | 0]); } }
+  };
+  SIG['레거시 서버 묘지'] = ({ at, R, r, J, link, chain }) => { // 줄지어 선 비석, 울타리, 앙상한 나무
+    const g0 = -R * .4;
+    for (let i = 0; i < 4; i++) for (let j = 0; j < 6; j++) { if (r() < .12) continue;
+      const x = (j - 2.5) * R * .4 + J() * R * .05, z = (i - 1.5) * R * .45 + J() * R * .05, w = R * .08, hh = R * (.16 + r() * .08), tilt = J() * .25, broken = r() < .2;
+      const P2 = (u, v) => [x + u + v * Math.sin(tilt), g0 + v * Math.cos(tilt), z], o = [P2(-w, 0), P2(-w, hh)];
+      if (!broken) for (let k = 1; k < 6; k++) { const a = Math.PI - k / 6 * Math.PI; o.push(P2(Math.cos(a) * w, hh + Math.sin(a) * w)); }
+      o.push(P2(w, broken ? hh * .6 : hh), P2(w, 0));
+      chain(o.map((p, k) => at(p[0], p[1], p[2], k === 0 || k === o.length - 1 ? SQUARE : DOT)), true); }
+    const F = R * 1.4, fence = []; for (let k = 0; k < 40; k++) { const [x, z] = sq4(k / 40, F, F * .75); fence.push(at(x, g0 + R * .12, z, CROSS)); } chain(fence, true);
+    const grow = (from, x, h, z, dx, dh, dz, len, d) => { const nx = x + dx * len, nh = h + dh * len, nz = z + dz * len, id = at(nx, nh, nz, d ? DOT : CROSS); link(from, id); if (!d) return;
+      for (let k = 0; k < 2; k++) { const ex = dx + J() * .9, eh = dh * .7 + .3, ez = dz + J() * .9, m = Math.hypot(ex, eh, ez); grow(id, nx, nh, nz, ex / m, eh / m, ez / m, len * .7, d - 1); } };
+    grow(at(F * .75, g0, -F * .5, SQUARE), F * .75, g0, -F * .5, 0, 1, 0, R * .35, 4);
+  };
+  SIG['피싱 해역'] = ({ at, R, J, r, link, pts }) => { // 수면의 부표에 매달려 처진 그물과 늘어진 낚싯바늘
+    const C = 13, RW = 9, g = [];
+    for (let j = 0; j < RW; j++) { const row = []; for (let i = 0; i < C; i++) { const u = (i / (C - 1) - .5) * 2, sag = (1 - u * u) * j / (RW - 1);
+        row.push(at(u * R * 1.3, R * .55 - j * R * .1 - sag * R * .45, J() * R * .03 + Math.sin(u * 3 + j) * R * .05 + j * R * .03, j ? DOT : RING)); } g.push(row); }
+    for (let j = 0; j < RW; j++) for (let i = 0; i < C; i++) { if (i + 1 < C) link(g[j][i], g[j][i + 1]); if (j + 1 < RW) link(g[j][i], g[j + 1][i]); }
+    pts(30, t => [(t - .5) * R * 3, R * .64 + Math.sin(t * 18) * R * .025, Math.cos(t * 7) * R * .3], DOT);
+    for (let k = 0; k < 8; k++) { const x = J() * R * 1.2, z = R * (.45 + r() * .6) * (r() < .5 ? -1 : 1), top = R * .62, len = R * (.6 + r() * .6);
+      const line = pts(6, t => [x, top - t * len, z], DOT); link(line[5], pts(4, t => { const a = t * Math.PI * 1.2; return [x + (1 - Math.cos(a)) * R * .05, top - len - Math.sin(a) * R * .06, z]; }, DIAMOND)[0]); }
+  };
+  SIG['다크웹 마켓'] = ({ at, R, r, link, pts }) => { // 어지럽게 늘어선 천막들과 그 사이에 걸린 등불 줄
+    const tents = [], g0 = -R * .4;
+    for (let k = 0; k < 16; k++) { let x, z, s, tries = 0;
+      do { const a = r() * 6.283, d = R * 1.25 * Math.sqrt(r()); x = Math.cos(a) * d; z = Math.sin(a) * d; s = R * (.07 + r() * .12); } while (++tries < 30 && tents.some(t => Math.hypot(t.x - x, t.z - z) < t.s + s + R * .05));
+      const n = 4 + (r() * 4 | 0), ph = r(), hh = s * (1.1 + r() * .8);
+      const base = pts(n, t => { const a = (t + ph) * 6.283; return [x + Math.cos(a) * s, g0, z + Math.sin(a) * s]; }, SQUARE, true);
+      const apex = at(x, g0 + hh, z, DIAMOND); base.forEach(id => link(id, apex)); tents.push({ x, z, s, apex, h: g0 + hh }); }
+    for (let k = 0; k < 10; k++) { const a = tents[r() * tents.length | 0], b = tents[r() * tents.length | 0]; if (a === b) continue;
+      const str = pts(6, t => [a.x + (b.x - a.x) * t, a.h + (b.h - a.h) * t - Math.sin(t * Math.PI) * R * .08, a.z + (b.z - a.z) * t], q => q % 2 ? RING : DOT); link(a.apex, str[0]); link(str[5], b.apex); }
+  };
+  SIG['미러 서버'] = ({ at, R, r, J, link, chain }) => { // 거울면을 사이에 두고 똑같이 뒤집힌 두 조각
+    const walk = [], cl = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+    for (let i = 0; i < 48; i++) { const parent = i ? (r() < .75 ? i - 1 : r() * i | 0) : -1, q = i ? walk[parent].p : [R * .3, 0, 0];
+      walk.push({ parent, k: r() < .6 ? SQUARE : DIAMOND, p: [cl(q[0] + J() * R * .22, R * .1, R * 1.3), cl(q[1] + J() * R * .25, -R * .8, R * .8), cl(q[2] + J() * R * .25, -R * .8, R * .8)] }); }
+    const A = [], B = [];
+    walk.forEach((w, i) => { A.push(at(w.p[0], w.p[1], w.p[2], w.k)); B.push(at(-w.p[0], w.p[1], w.p[2], w.k)); if (w.parent >= 0) { link(A[i], A[w.parent]); link(B[i], B[w.parent]); } if (i % 6 === 0) link(A[i], B[i]); });
+    const fr = []; for (let k = 0; k < 32; k++) { const [y, z] = sq4(k / 32, R * .95, R * .95); fr.push(at(0, y, z, k % 8 ? DOT : RING)); } chain(fr, true);
+  };
+  SIG['노이즈 폭풍지대'] = ({ at, R, r, J, link, pts }) => { // 비틀리며 솟구치는 회오리, 휘날리는 잔해, 번개
+    const L = 15, n = 14, rings = [];
+    for (let l = 0; l < L; l++) { const t = l / (L - 1), h = -R * .6 + t * R * 1.6, rad = R * (.06 + Math.pow(t, 1.7) * .95), cx = Math.sin(t * 5) * R * .15, cz = Math.cos(t * 4) * R * .1;
+      rings.push(pts(n, s => { const a = s * 6.283 + t * 4; return [cx + Math.cos(a) * rad, h, cz + Math.sin(a) * rad]; }, l === L - 1 ? RING : DOT, true)); }
+    for (let l = 1; l < L; l++) for (let i = 0; i < n; i += 2) link(rings[l - 1][i], rings[l][(i + 1) % n]);
+    for (let i = 0; i < 60; i++) { const a = r() * 6.283, h = -R * .6 + r() * R * 1.5, d = R * (.4 + r() * 1.0) * (.5 + (h + R * .6) / (R * 1.6)); at(Math.cos(a) * d, h, Math.sin(a) * d, r() < .5 ? CROSS : SQUARE); }
+    for (let b = 0; b < 3; b++) { const a = r() * 6.283, d = R * (.6 + r() * .4); pts(6, t => [Math.cos(a) * d + J() * R * .1, R * 1.0 - t * R * 1.3, Math.sin(a) * d + J() * R * .1], DIAMOND); }
+  };
+  SIG['코드 정글'] = ({ at, R, r, J, link, pts, near }) => { // 빽빽한 우듬지에서 늘어진 덩굴과 아래의 고사리
+    const can = [], cc = [];
+    for (let i = 0; i < 55; i++) { const a = r() * 6.283, d = R * 1.3 * Math.sqrt(r()), p = [Math.cos(a) * d, R * .65 + J() * R * .12, Math.sin(a) * d]; cc.push(p); can.push(at(p[0], p[1], p[2], r() < .7 ? DOT : DIAMOND)); }
+    near(can, 2);
+    for (let v = 0; v < 24; v++) { const k = r() * can.length | 0, [x, h, z] = cc[k], len = R * (.5 + r() * 1.0), sw = r() * 6;
+      const vine = pts(8, t => [x + Math.sin(t * 4 + sw) * R * .06, h - t * len, z + Math.cos(t * 3 + sw) * R * .04], q => q === 7 ? RING : DOT); link(can[k], vine[0]);
+      for (let q = 2; q < 7; q += 2) link(vine[q], at(x + J() * R * .08, h - q / 7 * len + R * .02, z + J() * R * .08, DIAMOND)); }
+    for (let f = 0; f < 9; f++) { const x = J() * R * 1.1, z = J() * R * 1.1, g0 = -R * .6, c = at(x, g0, z, SQUARE);
+      for (let q = 0; q < 6; q++) { const a = q / 6 * 6.283; link(c, at(x + Math.cos(a) * R * .12, g0 + R * .1, z + Math.sin(a) * R * .12, DOT)); } }
+  };
+  SIG['어비스'] = ({ R, link, pts }) => { // 한가운데로 끝없이 꺼져 드는 중력 우물
+    const RG = 12, SP = 24, g = [], hOf = rho => R * .55 - R * .16 / (rho / R);
+    for (let i = 0; i < RG; i++) { const rho = R * (.1 + Math.pow(i / (RG - 1), 1.3) * 1.35);
+      g.push(pts(SP, t => { const a = t * 6.283 + i * .08; return [Math.cos(a) * rho, hOf(rho), Math.sin(a) * rho]; }, i ? DOT : RING, true)); }
+    for (let i = 1; i < RG; i++) for (let j = 0; j < SP; j++) link(g[i - 1][j], g[i][j]);
+    pts(40, t => { const rho = R * (1.4 - t * 1.25), a = t * 6.283 * 3; return [Math.cos(a) * rho, hOf(rho) + R * .08, Math.sin(a) * rho]; }, i => i % 5 ? DOT : DIAMOND);
+  };
+  SIG['사성수 결계'] = ({ at, R, link, chain, pts }) => { // 네 기둥이 감싼 사각 결계와 네 방위의 수호 문양
+    const F = R * 1.1, g0 = -R * .5, top = R * .55, cs = [[-F, -F], [F, -F], [F, F], [-F, F]];
+    const edge = (a, b, n, k) => pts(n, t => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t], k);
+    for (let k = 0; k < 4; k++) { const [x, z] = cs[k], [x2, z2] = cs[(k + 1) % 4];
+      edge([x, g0, z], [x, top, z], 8, SQUARE); edge([x, top, z], [x2, top, z2], 12, DOT); edge([x, g0, z], [x2, g0, z2], 12, DOT); }
+    edge([-F, top, -F], [F, top, F], 15, DIAMOND); edge([F, top, -F], [-F, top, F], 15, DIAMOND);
+    const o = F * 1.4, s = R * .22;
+    pts(14, t => [Math.cos(t * 6.283) * s, Math.sin(t * 6.283) * s, -o], RING, true);                              // 북: 고리
+    pts(3, t => { const a = Math.PI / 2 + t * 6.283; return [o, Math.sin(a) * s * 1.2, Math.cos(a) * s * 1.2]; }, DIAMOND, true); // 동: 삼각
+    pts(4, t => { const a = t * 6.283; return [Math.cos(a) * s, Math.sin(a) * s * 1.3, o]; }, SQUARE, true);        // 남: 마름모
+    pts(20, t => { const a = t * 6.283 * 2.2, w = s * (.2 + t * .9); return [-o, Math.sin(a) * w, Math.cos(a) * w]; }, DOT); // 서: 소용돌이
+    const c = R * .2, oct = [[c, 0, 0], [-c, 0, 0], [0, c, 0], [0, -c, 0], [0, 0, c], [0, 0, -c]].map(p => at(p[0], p[1], p[2], DIAMOND));
+    for (let i = 0; i < 6; i++) for (let j = i + 1; j < 6; j++) if ((i >> 1) !== (j >> 1)) link(oct[i], oct[j]);
+  };
+  SIG['올림포스 서버'] = ({ at, R, link, chain, pts }) => { // 계단 기단 위의 열주와 삼각 박공 지붕
+    const W = R * 1.0, D = R * .6, g0 = -R * .55, loop = (w, d, h, n, k) => pts(n, t => { const [x, z] = sq4(t, w, d); return [x, h, z]; }, k, true);
+    for (let s = 0; s < 3; s++) loop(W + (3 - s) * R * .08, D + (3 - s) * R * .08, g0 + s * R * .06, 40, SQUARE);
+    const b = g0 + R * .18, colH = R * .75, cols = [];
+    for (let i = 0; i < 8; i++) { const x = -W + i * 2 * W / 7; cols.push([x, -D], [x, D]); }
+    for (let i = 1; i < 4; i++) { const z = -D + i * 2 * D / 4; cols.push([-W, z], [W, z]); }
+    cols.forEach(([x, z]) => pts(5, t => [x, b + t * colH, z], q => q === 4 ? DIAMOND : DOT));
+    const top = b + colH; loop(W, D, top, 44, SQUARE); loop(W * 1.04, D * 1.04, top + R * .07, 44, DOT);
+    // 박공: 앞뒤 삼각형과 용마루
+    for (const z of [-D, D]) { pts(6, t => [-W * 1.04 * (1 - t), top + R * .07 + t * R * .33, z * 1.04], DOT); pts(6, t => [W * 1.04 * (1 - t), top + R * .07 + t * R * .33, z * 1.04], DOT); }
+    chain(pts(10, t => [0, top + R * .4, (t - .5) * 2 * D], DOT));
+    pts(4, t => { const [x, z] = sq4(t, W * .35, D * .45); return [x, b + R * .02, z]; }, SQUARE, true);
+  };
+  SIG['천사의 계단'] = ({ at, R, r, J, link, chain, pts }) => { // 하늘로 곧게 오르는 계단, 꼭대기의 날개와 광륜, 흩날리는 깃털
+    const N = 22, sides = [[], []];
+    for (let i = 0; i < N; i++) { const t = i / (N - 1), x = -R * 1.1 + t * R * 1.9, h = -R * .8 + t * R * 1.7, w = R * (.28 - t * .12);
+      [-1, 1].forEach((s, si) => { const a = at(x, h, s * w, SQUARE), b2 = at(x + R * .086, h, s * w, DOT); link(a, b2); sides[si].push(a, b2); });
+      link(sides[0][sides[0].length - 2], sides[1][sides[1].length - 2]); }
+    chain(sides[0]); chain(sides[1]);
+    const tx = R * .8, th = R * .9;
+    for (const s of [-1, 1]) { const bones = [];
+      for (let f = 0; f < 11; f++) { const bz = s * R * (.1 + f * .06), bh = th + R * .05 + f * R * .03, ang = .1 + f * .13, len = R * (1.0 - f * .05);
+        const fe = pts(4, t => [tx - t * R * .12, bh + Math.sin(ang) * len * t, bz + s * Math.cos(ang) * len * t], q => q === 3 ? DIAMOND : DOT); bones.push(fe[0]); }
+      chain(bones); }
+    pts(16, t => [tx + Math.cos(t * 6.283) * R * .2, th + R * .55, Math.sin(t * 6.283) * R * .2], RING, true);
+    for (let k = 0; k < 18; k++) { const x = J() * R * 1.3, h = J() * R * .9, z = J() * R * 1.1; link(at(x, h, z, DOT), at(x + R * .05, h - R * .03, z + J() * R * .03, DIAMOND)); }
+  };
+  SIG['X 프로그램 격리구역'] = ({ R, link, pts }) => { // 철창 격리 상자 안에 갇힌 거대한 X
+    const F = R * .95, edge = (a, b, n, k) => pts(n, t => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t], k);
+    const V = [[-F, -F, -F], [F, -F, -F], [F, -F, F], [-F, -F, F], [-F, F, -F], [F, F, -F], [F, F, F], [-F, F, F]];
+    for (const [a, b] of [[0, 1], [1, 2], [2, 3], [3, 0], [4, 5], [5, 6], [6, 7], [7, 4], [0, 4], [1, 5], [2, 6], [3, 7]]) edge(V[a], V[b], 7, SQUARE);
+    for (let k = 1; k < 6; k++) { const u = -F + k * F / 3; for (const [x, z] of [[u, -F], [u, F], [-F, u], [F, u]]) edge([x, -F, z], [x, F, z], 6, DOT); }
+    const w = R * .1;
+    for (const sg of [1, -1]) { const px = -sg / Math.SQRT2, ph = 1 / Math.SQRT2, rails = [];
+      for (const [dd, dz] of [[-1, -1], [-1, 1], [1, -1], [1, 1]]) { const o = [px * dd * w, ph * dd * w, dz * w];
+        rails.push(edge([-F * .8 + o[0], -F * .8 * sg + o[1], o[2]], [F * .8 + o[0], F * .8 * sg + o[1], o[2]], 13, DIAMOND)); }
+      for (let i = 0; i < 13; i += 3) { link(rails[0][i], rails[1][i]); link(rails[1][i], rails[3][i]); link(rails[3][i], rails[2][i]); link(rails[2][i], rails[0][i]); } }
+  };
 
   function mulberry(seed) {
     return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
@@ -144,8 +476,8 @@
       const c = clusters.length;
       curRegion = region;
       const col = fixed && !fixed.loose ? REGION_COLOR[region] : (r() < .6 ? REGION_COLOR[region] : Math.floor(r() * PALETTE.length));
-      const shape = fixed && fixed.shape ? fixed.shape : SHAPES[Math.floor(r() * SHAPES.length)];
-      const R = (210 + r() * 170) * (fixed ? fixed.scale : 1), M = rotM();
+      const shape = fixed.shape, R = 600 * fixed.scale, yaw = r() * 6.283, cw = Math.cos(yaw), sw = Math.sin(yaw);
+      const M = [cw, 0, sw, 0, 1, 0, -sw, 0, cw]; // 위아래는 그대로 두고 돌려 놓기만 해요
       const hub = add(cx, cy, cz, col, HUB, 3.2, c);
       hubs.push(hub); clusters.push({ x: cx, y: cy, z: cz, hub, col, shape, region: curRegion });
       const ids = [];
@@ -154,139 +486,15 @@
         const cc = r() < (fixed && !fixed.loose ? .05 : .14) ? Math.floor(r() * PALETTE.length) : col;
         const i = add(x, y, z, cc, k ?? kindPick(), .9 + r() * 1.3, c); ids.push(i); return i;
       };
-      switch (shape) {
-        case 'sphere': { const n = 40 + (r() * 40 | 0); for (let i = 0; i < n; i++) { const d = randDir(), rr = R * Math.cbrt(r()); put(d[0] * rr, d[1] * rr, d[2] * rr); } break; }
-        case 'torus': { const n = 50 + (r() * 30 | 0), a = R * .85, b = R * .3;
-          for (let i = 0; i < n; i++) { const u = r() * 6.283, v = r() * 6.283; put((a + b * Math.cos(v)) * Math.cos(u), b * Math.sin(v), (a + b * Math.cos(v)) * Math.sin(u)); } break; }
-        case 'ring': { const rings = 2 + (r() * 2 | 0);
-          for (let gI = 0; gI < rings; gI++) { const n = 22 + (r() * 18 | 0), rr = R * (.45 + gI * .3), tilt = (r() - .5) * 1.2; let prev = -1, first = -1;
-            for (let i = 0; i < n; i++) { const a = i / n * 6.283; const id = put(Math.cos(a) * rr, Math.sin(a) * rr * tilt, Math.sin(a) * rr); if (prev >= 0) link(prev, id); else first = id; prev = id; }
-            link(prev, first); link(first, hub); } break; }
-        case 'spiral': { const arms = 2 + (r() * 3 | 0), n = 14 + (r() * 10 | 0);
-          for (let a = 0; a < arms; a++) { let prev = hub;
-            for (let i = 0; i < n; i++) { const t = (i + 1) / n, ang = t * 5 + a / arms * 6.283; const id = put(Math.cos(ang) * t * R * 1.4, (r() - .5) * 26, Math.sin(ang) * t * R * 1.4); link(prev, id); prev = id; } } break; }
-        case 'grid': { const n = 6 + (r() * 3 | 0), sp = R * 2 / n, gr = [];
-          for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) gr[i * n + j] = put((i - (n - 1) / 2) * sp, 0, (j - (n - 1) / 2) * sp, r() < .7 ? SQUARE : kindPick());
-          for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) { if (i + 1 < n && r() < .85) link(gr[i * n + j], gr[(i + 1) * n + j]); if (j + 1 < n && r() < .85) link(gr[i * n + j], gr[i * n + j + 1]); }
-          link(hub, gr[(n >> 1) * n + (n >> 1)]); break; }
-        case 'cube': { const n = 4, sp = R * 2 / n, gr = [];
-          for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) for (let k = 0; k < n; k++) gr.push(put((i - 1.5) * sp, (j - 1.5) * sp, (k - 1.5) * sp, r() < .6 ? DIAMOND : kindPick()));
-          const at = (i, j, k) => gr[(i * n + j) * n + k];
-          for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) for (let k = 0; k < n; k++) {
-            if (i + 1 < n && r() < .6) link(at(i, j, k), at(i + 1, j, k)); if (j + 1 < n && r() < .6) link(at(i, j, k), at(i, j + 1, k)); if (k + 1 < n && r() < .6) link(at(i, j, k), at(i, j, k + 1)); }
-          link(hub, at(1, 1, 1)); break; }
-        case 'helix': { const n = 26 + (r() * 16 | 0), h = R * 2.4; let pa = -1, pb = -1;
-          for (let i = 0; i < n; i++) { const t = i / (n - 1), ang = t * 12;
-            const a = put(Math.cos(ang) * R * .45, (t - .5) * h, Math.sin(ang) * R * .45), b = put(-Math.cos(ang) * R * .45, (t - .5) * h, -Math.sin(ang) * R * .45);
-            if (pa >= 0) { link(pa, a); link(pb, b); } if (i % 3 === 0) link(a, b); pa = a; pb = b; }
-          link(hub, ids[(n >> 1) * 2]); break; }
-        case 'burst': { const rays = 8 + (r() * 8 | 0), n = 4 + (r() * 4 | 0);
-          for (let k = 0; k < rays; k++) { const d = randDir(); let prev = hub;
-            for (let i = 0; i < n; i++) { const t = (i + 1) / n * R * 1.3; const id = put(d[0] * t, d[1] * t, d[2] * t); link(prev, id); prev = id; } } break; }
-        case 'dna': { const n = 30 + (r() * 10 | 0), h = R * 2.7, rad = R * .42; let pa = -1, pb = -1, mid = -1;
-          for (let i = 0; i < n; i++) { const t = i / (n - 1), ang = t * 15, y = (t - .5) * h;
-            const a = put(Math.cos(ang) * rad, y, Math.sin(ang) * rad, DIAMOND), b = put(-Math.cos(ang) * rad, y, -Math.sin(ang) * rad, DIAMOND);
-            if (pa >= 0) { link(pa, a); link(pb, b); }
-            if (i % 2 === 0) { const m = put(0, y, 0, DOT); link(a, m); link(m, b); if (i === (n >> 2) * 2) mid = m; }
-            pa = a; pb = b; }
-          if (mid >= 0) link(hub, mid); break; }
-        case 'galaxy': { for (let i = 0; i < 18; i++) { const d = randDir(), rr = R * .24 * Math.cbrt(r()); link(hub, put(d[0] * rr, d[1] * rr * .6, d[2] * rr, DOT)); }
-          const arms = 2 + (r() * 3 | 0), n = 22, a0 = r() * 6.283;
-          for (let a = 0; a < arms; a++) { let prev = hub;
-            for (let i = 0; i < n; i++) { const t = (i + 1) / n, ang = a0 + a / arms * 6.283 + t * 6.5, rr = R * 1.6 * t;
-              const id = put(Math.cos(ang) * rr, (r() - .5) * R * .08, Math.sin(ang) * rr); link(prev, id); prev = id;
-              if (r() < .55) link(id, put(Math.cos(ang) * rr + (r() - .5) * R * .3, (r() - .5) * R * .14, Math.sin(ang) * rr + (r() - .5) * R * .3, DOT)); } } break; }
-        case 'tree': { const grow = (from, x, y, z, dx, dy, dz, len, depth) => {
-            const nx = x + dx * len, ny = y + dy * len, nz = z + dz * len, id = put(nx, ny, nz, depth > 1 ? SQUARE : DIAMOND); link(from, id);
-            if (depth <= 0) return;
-            const kids = depth > 2 ? 2 : 2 + (r() < .5 ? 1 : 0);
-            for (let k = 0; k < kids; k++) { const ex = dx + (r() - .5) * 1.5, ey = dy - .15 - r() * .2, ez = dz + (r() - .5) * 1.5, m = Math.hypot(ex, ey, ez);
-              grow(id, nx, ny, nz, ex / m, ey / m, ez / m, len * .74, depth - 1); } };
-          let prev = hub; for (let i = 1; i <= 3; i++) { const id = put((r() - .5) * 8, R * .9 - i * R * .3, (r() - .5) * 8, SQUARE); link(prev, id); prev = id; }
-          grow(prev, 0, 0, 0, 0, -1, 0, R * .5, 4); break; }
-        case 'crystal': { const L = 3, rad = 3, sp = R * .34, at = new Map();
-          for (let l = 0; l < L; l++) for (let q = -rad; q <= rad; q++) for (let w = -rad; w <= rad; w++) { if (Math.abs(q + w) > rad) continue;
-            at.set(l + ',' + q + ',' + w, put(sp * (q + w / 2), (l - (L - 1) / 2) * sp * 1.1, sp * w * .866, r() < .6 ? DIAMOND : kindPick())); }
-          for (const [key, id] of at) { const [l, q, w] = key.split(',').map(Number);
-            for (const [dq, dw] of [[1, 0], [0, 1], [-1, 1]]) { const o = at.get(l + ',' + (q + dq) + ',' + (w + dw)); if (o !== undefined && r() < .88) link(id, o); }
-            const up = at.get((l + 1) + ',' + q + ',' + w); if (up !== undefined && r() < .45) link(id, up); }
-          link(hub, at.get('1,0,0')); break; }
-        case 'knot': { const P = r() < .5 ? 2 : 3, Q = P === 2 ? 3 : 4, n = 96; let prev = -1, first = -1;
-          for (let i = 0; i < n; i++) { const t = i / n * 6.283, rr = R * (.72 + .3 * Math.cos(Q * t));
-            const id = put(rr * Math.cos(P * t), R * .38 * Math.sin(Q * t), rr * Math.sin(P * t), i % 8 ? DOT : RING);
-            if (prev >= 0) link(prev, id); else first = id; prev = id; }
-          link(prev, first); link(hub, first); break; }
-        case 'web': { const spokes = 10 + (r() * 5 | 0), rings = 6, at = [];
-          for (let k = 0; k < spokes; k++) { const a = k / spokes * 6.283; at.push([]);
-            for (let ri = 0; ri < rings; ri++) { const rr = R * 1.4 * (ri + 1) / rings * (.92 + r() * .16);
-              const id = put(Math.cos(a) * rr, (r() - .5) * R * .05, Math.sin(a) * rr, ri === rings - 1 ? DIAMOND : DOT); at[k].push(id);
-              if (ri) link(at[k][ri - 1], id); else link(hub, id); } }
-          for (let k = 0; k < spokes; k++) for (let ri = 0; ri < rings; ri++) if (r() < .9) link(at[k][ri], at[(k + 1) % spokes][ri]); break; }
-        case 'city': { const n = 5, sp = R * .4, base = [];
-          for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
-            const x = (i - (n - 1) / 2) * sp, z = (j - (n - 1) / 2) * sp, h = 1 + (r() * (Math.abs(i - 2) + Math.abs(j - 2) < 2 ? 7 : 4) | 0);
-            let prev = put(x, R * .6, z, SQUARE); base.push(prev);
-            for (let k = 1; k <= h; k++) { const id = put(x, R * .6 - k * R * .2, z, k === h ? DIAMOND : SQUARE); link(prev, id); prev = id; } }
-          for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) { if (i + 1 < n && r() < .75) link(base[i * n + j], base[(i + 1) * n + j]); if (j + 1 < n && r() < .75) link(base[i * n + j], base[i * n + j + 1]); }
-          link(hub, base[12]); break; }
-        case 'shell': { const n = 96, at = [];
-          for (let i = 0; i < n; i++) { const y = 1 - 2 * (i + .5) / n, rad = Math.sqrt(1 - y * y), th = i * 2.39996;
-            at.push(put(Math.cos(th) * rad * R, y * R, Math.sin(th) * rad * R, i % 5 ? DOT : RING)); }
-          for (let i = 0; i < n; i++) { if (i + 8 < n) link(at[i], at[i + 8]); if (i + 13 < n) link(at[i], at[i + 13]); if (i + 21 < n && r() < .4) link(at[i], at[i + 21]); }
-          link(hub, at[n >> 1]); break; }
-        case 'flower': { const k = [3, 5, 7][r() * 3 | 0], n = 110; let prev = -1, first = -1;
-          for (let i = 0; i < n; i++) { const th = i / n * Math.PI, rr = R * 1.35 * Math.abs(Math.cos(k * th));
-            const id = put(Math.cos(th) * rr, -rr * rr / R * .18, Math.sin(th) * rr, DOT); if (prev >= 0) link(prev, id); else first = id; prev = id; }
-          link(prev, first);
-          for (let i = 0; i < 12; i++) { const d = randDir(), rr = R * .16; link(hub, put(d[0] * rr, d[1] * rr, d[2] * rr, RING)); }
-          let st = hub; for (let i = 1; i <= 7; i++) { const id = put(Math.sin(i * .5) * R * .08, i * R * .16, 0, SQUARE); link(st, id); st = id; }
-          link(hub, first); break; }
-        case 'chain': { const m = 5 + (r() * 3 | 0), rr = R * .34, n = 14; let prevRing = null;
-          for (let k = 0; k < m; k++) { const cxk = (k - (m - 1) / 2) * rr * 1.45, ring = []; let prev = -1;
-            for (let i = 0; i < n; i++) { const a = i / n * 6.283, u = Math.cos(a) * rr * 1.25, v = Math.sin(a) * rr * .8;
-              const id = k % 2 ? put(cxk + u, 0, v) : put(cxk + u, v, 0); ring.push(id); if (prev >= 0) link(prev, id); prev = id; }
-            link(prev, ring[0]);
-            if (prevRing) link(prevRing[0], ring[n >> 1]); else link(hub, ring[n >> 1]);
-            prevRing = ring; } break; }
-        case 'nebula': { const blobs = 4 + (r() * 3 | 0); let prevC = hub;
-          for (let b = 0; b < blobs; b++) { const d = randDir(), dd = R * (.4 + r() * .9), cxb = d[0] * dd, cyb = d[1] * dd * .7, czb = d[2] * dd;
-            const cid = put(cxb, cyb, czb, RING); link(prevC, cid); if (r() < .5) link(hub, cid); prevC = cid;
-            const cnt = 12 + (r() * 14 | 0), br = R * (.14 + r() * .24);
-            for (let i = 0; i < cnt; i++) { const e = randDir(), q = br * Math.cbrt(r()); link(cid, put(cxb + e[0] * q, cyb + e[1] * q, czb + e[2] * q, DOT)); } } break; }
-        case 'pyramid': { const layers = 5; let prevCorners = null;
-          for (let l = 0; l < layers; l++) { const half = R * 1.1 * (1 - l / layers), y = R * .7 - l * R * .32, per = 4 * Math.max(1, layers - l), pts = [];
-            for (let i = 0; i < per; i++) { const t = i / per * 4, side = Math.floor(t), f = t - side;
-              const [x, z] = [[-half + 2 * half * f, -half], [half, -half + 2 * half * f], [half - 2 * half * f, half], [-half, half - 2 * half * f]][side];
-              pts.push(put(x, y, z, f === 0 ? DIAMOND : SQUARE)); }
-            pts.forEach((id, i) => link(id, pts[(i + 1) % pts.length]));
-            const corners = [0, 1, 2, 3].map(q => pts[q * pts.length / 4 | 0]);
-            if (prevCorners) corners.forEach((id, q) => link(id, prevCorners[q])); prevCorners = corners; }
-          const apex = put(0, R * .7 - layers * R * .32, 0, RING); prevCorners.forEach(id => link(apex, id)); link(hub, apex); break; }
-        case 'wave': { const n = 11, sp = R * 2.6 / n, gr = [], ph = r() * 6;
-          for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) { const x = (i - (n - 1) / 2) * sp, z = (j - (n - 1) / 2) * sp;
-            gr.push(put(x, Math.sin(i * .75 + ph) * R * .22 + Math.cos(j * .6) * R * .16, z, DOT)); }
-          for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) { if (i + 1 < n) link(gr[i * n + j], gr[(i + 1) * n + j]); if (j + 1 < n && (i + j) % 2 === 0) link(gr[i * n + j], gr[i * n + j + 1]); }
-          link(hub, gr[(n >> 1) * n + (n >> 1)]); break; }
-        case 'atom': { for (let i = 0; i < 14; i++) { const d = randDir(), rr = R * .15 * Math.cbrt(r()); link(hub, put(d[0] * rr, d[1] * rr, d[2] * rr, RING)); }
-          const orbits = 3 + (r() * 2 | 0);
-          for (let o = 0; o < orbits; o++) { const Mo = rotM(), n = 36; let prev = -1, first = -1;
-            for (let i = 0; i < n; i++) { const a = i / n * 6.283, ex = Math.cos(a) * R * 1.35, ez = Math.sin(a) * R * .5;
-              const id = put(Mo[0] * ex + Mo[2] * ez, Mo[3] * ex + Mo[5] * ez, Mo[6] * ex + Mo[8] * ez, i === 0 ? RING : DOT);
-              if (prev >= 0) link(prev, id); else first = id; prev = id; }
-            link(prev, first); link(hub, first); } break; }
-        case 'mobius': { const n = 36, vs = [-1, 0, 1], at = [];
-          for (let i = 0; i < n; i++) { const u = i / n * 6.283; at.push(vs.map(v => { const w = v * .45, k = 1 + w * Math.cos(u / 2);
-            return put(k * Math.cos(u) * R, w * Math.sin(u / 2) * R, k * Math.sin(u) * R, v ? DOT : DIAMOND); })); }
-          for (let i = 0; i < n; i++) { for (let v = 0; v < 3; v++) { link(at[i][v], i + 1 < n ? at[i + 1][v] : at[0][2 - v]); if (v < 2) link(at[i][v], at[i][v + 1]); } }
-          link(hub, at[0][1]); break; }
-        case 'gear': { const teeth = 12 + (r() * 5 | 0), ro = R * 1.25, ri = R * 1.02, pts = [];
-          for (let k = 0; k < teeth; k++) { const a = k / teeth * 6.283, w = 6.283 / teeth;
-            for (const [da, rr] of [[0, ri], [w * .2, ro], [w * .5, ro], [w * .7, ri]]) pts.push(put(Math.cos(a + da) * rr, 0, Math.sin(a + da) * rr, rr === ro ? SQUARE : DOT)); }
-          pts.forEach((id, i) => link(id, pts[(i + 1) % pts.length]));
-          const inner = []; for (let k = 0; k < 10; k++) { const a = k / 10 * 6.283; inner.push(put(Math.cos(a) * R * .35, 0, Math.sin(a) * R * .35, DIAMOND)); }
-          inner.forEach((id, k) => { link(id, inner[(k + 1) % 10]); link(id, hub); if (k % 2 === 0) link(id, pts[Math.round(k / 10 * pts.length) % pts.length]); });
-          break; }
-      }
+      const at = (x, h, z, k) => put(x, -h, z, k);
+      const chain = (a, closed) => { for (let i = 1; i < a.length; i++) link(a[i - 1], a[i]); if (closed && a.length > 2) link(a[a.length - 1], a[0]); return a; };
+      const pts = (n, f, k, closed) => { const a = []; for (let i = 0; i < n; i++) { const p = f(n > 1 ? i / (closed ? n : n - 1) : 0, i); a.push(at(p[0], p[1], p[2], typeof k === 'function' ? k(i) : k)); } return chain(a, closed); };
+      const fib = (n, x, h, z, rad, k, squash = 1) => { const a = []; for (let i = 0; i < n; i++) { const y = 1 - 2 * (i + .5) / n, q = Math.sqrt(1 - y * y), th = i * 2.39996; a.push(at(x + Math.cos(th) * q * rad, h + y * rad * squash, z + Math.sin(th) * q * rad, k)); } return a; };
+      const closest = (id, arr) => { let best = arr[0], bd = Infinity; for (const j of arr) if (j !== id) { const dd = d2(id, j); if (dd < bd) { bd = dd; best = j; } } return best; };
+      const near = (a, kk) => { for (const i of a) a.filter(j => j !== i).map(j => [j, d2(i, j)]).sort((p, q) => p[1] - q[1]).slice(0, kk).forEach(([j]) => link(i, j)); return a; };
+      const box = (x, h, z, w, hh, d, k) => { const c = []; for (const dy of [0, hh]) for (const [dx, dz] of [[-w, -d], [w, -d], [w, d], [-w, d]]) c.push(at(x + dx, h + dy, z + dz, k));
+        for (let i = 0; i < 4; i++) { link(c[i], c[(i + 1) % 4]); link(c[4 + i], c[4 + (i + 1) % 4]); link(c[i], c[4 + i]); } return c; };
+      SIG[shape]({ at, put, link, chain, pts, fib, closest, near, box, hub, R, r, J: () => (r() - .5) * 2 });
       // make sure every node in the cluster reaches the hub (nearest-attachment)
       const attached = [hub];
       for (const id of ids) {
@@ -295,31 +503,10 @@
         for (const j of attached) { const dd = d2(id, j); if (dd < bd) { bd = dd; best = j; } }
         link(id, best); attached.push(id);
       }
-      if (shape === 'sphere' || shape === 'torus') for (const id of ids) if (r() < .25) {
-        let best = -1, bd = Infinity; for (const j of ids) if (j !== id) { const dd = d2(id, j); if (dd < bd) { bd = dd; best = j; } }
-        if (best >= 0) link(id, best);
-      }
     };
-    // special networks first, so the open world spreads around them
-    for (const [region, ax, ay, az, shapes, scale] of SPECIAL) {
-      shapes.forEach((shape, k) => {
-        const a = k / shapes.length * 6.283 + r(), off = k ? 640 : 0;
-        const el = (r() - .5) * 1.4;
-        makeCluster(ax + Math.cos(a) * Math.cos(el) * off, ay + Math.sin(el) * off + (r() - .5) * 200, az + Math.sin(a) * Math.cos(el) * off, region, { shape, scale });
-      });
-    }
-    const perContinent = Math.max(2, Math.round(clusterCount / OPEN_REGIONS));
-    CONTINENT_ANCHOR.forEach(([ax, ay, az], region) => {
-      for (let c = 0; c < perContinent; c++) {
-        let cx = ax, cy = ay, cz = az, tries = 0;
-        if (c) do {
-          const d = randDir(), rad = 600 + r() * 600;
-          cx = ax + d[0] * rad; cy = ay + d[1] * rad * 1.1; cz = az + d[2] * rad; tries++;
-        } while (tries < 60 && clusters.some(q => (q.x - cx) ** 2 + (q.y - cy) ** 2 + (q.z - cz) ** 2 < 620 * 620));
-        const sig = CONTINENT_SHAPES[region];
-        makeCluster(cx, cy, cz, region, { shape: sig[c % sig.length], scale: 1.05, loose: true });
-      }
-    });
+    // 구역마다 고유한 모양 하나씩
+    for (const [region, ax, ay, az, scale] of SPECIAL) makeCluster(ax, ay, az, region, { shape: REGION_NAMES[region], scale });
+    CONTINENT_ANCHOR.forEach(([ax, ay, az], region) => makeCluster(ax, ay, az, region, { shape: REGION_NAMES[region], scale: 1.1 }));
     // backbone: hubs to their nearest hubs through bent relay chains
     const done = new Set();
     hubs.forEach((h, ci) => {
