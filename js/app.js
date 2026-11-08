@@ -195,13 +195,34 @@ function fillSil(root){
 const picTag = (name, cls) => { const src = picOf(name); return src ? `<img class="${cls}" src="${esc(src)}" alt="${esc(name)}" loading="lazy">` : ''; };
 // 성향 점수: 데이터의 기본값(1~3)에 배율을 곱하고 약간의 운을 더해요. 최대 statMax
 const gain = (fx, scale) => fx ? Object.fromEntries(Object.entries(fx).map(([k, v]) => [k, v * scale + Math.floor(Math.random() * (scale / 2 + 1))])) : null;
+/* ---------- 친밀도: 여행 중 만난 디지몬마다 0~100 ---------- */
+const bondOf = n => (J && J.bonds[n]) || 0;
+const bondTier = v => { let name = JD.bond.tiers[0][1]; for (const [min, nm] of JD.bond.tiers) if (v >= min) name = nm; return name; };
+const bondChip = b => b && b.d ? `<i class="t-bond${b.d < 0 ? ' neg' : ''}">♥ ${esc(b.mon)} ${b.d > 0 ? '+' : ''}${b.d}</i>` : '';
+const jogPair = () => (J && !J.special && !J.jogressed) ? JD.jogress.find(j => j.a === J.form) : null;
+// 선택지 행동에 따른 친밀도 변화: 만나기만 해도 조금, 도우면 크게, 몰아내거나 흡수하면 내려가요
+function actBond(fx){ let d = JD.bond.meet; for (const [k, v] of Object.entries(fx || {})) d += (JD.bond.act[k] || 0) * v / 2; return Math.round(d); }
+function addBond(mon, d){
+  if (!mon || !d) return null;
+  const before = bondOf(mon), after = Math.max(0, Math.min(JD.bond.max, before + d));
+  J.bonds[mon] = after;
+  if (after === before) return null;
+  const tb = bondTier(before), ta = bondTier(after);
+  return { mon, d: after - before, up: after > before && ta !== tb ? ta : null, v: after };
+}
+// 친밀도 단계가 오르면 기록에 남겨요. 조그레스 짝과 단짝이 되면 조그레스를 할 수 있다고 알려요
+function bondUp(b){
+  if (!b || !b.up) return;
+  const jg = jogPair(), ready = jg && jg.b === b.mon && b.v >= JD.bond.jogress;
+  log(`${b.mon}${wa(b.mon)} ${b.up}${ga(b.up)} 되었어요! (친밀도 ${b.v})${ready ? ' 이제 함께 조그레스 진화를 할 수 있어요.' : ''}`, 'bond', null, b.mon);
+}
 function addTraits(fx){ if (fx) for (const [k, v] of Object.entries(fx)) J.traits[k] = Math.min(JD.statMax, J.traits[k] + v); }
 
 function startJourney(){
   const dg = lastRes.dg;
   J = { dg, stage: 0, form: dg.ko, label: stageLabel(0), moves: 0, exp: 0, ended: false,
         route: [{ form: dg.ko, stage: 0, label: stageLabel(0), cap: capacity(dg.ko, 0), regions: [], path: '시작' }],
-        visited: new Set([NET.currentRegion()]), recent: [], special: null, branch: null, capsuled: false, jogressed: false,
+        visited: new Set([NET.currentRegion()]), recent: [], special: null, branch: null, capsuled: false, jogressed: false, bonds: {}, jogPartner: null,
         busy: false, choosing: false, traits: Object.fromEntries(TRAITS.map(t => [t, 0])), log: [] };
   NET.speed = 1; $('jFast').classList.remove('on');
   hideCard(); hideChoice();
@@ -218,19 +239,19 @@ function endJourney(){
 function idleStatus(){
   $('netStat').innerHTML = `EXPLORE · ${J.moves} TRIPS · ${J.exp} STEPS · ${esc(NET.regionName(NET.currentRegion()) || 'DEEP WEB')}<b>가고 싶은 구역을 눌러 주세요</b>`;
 }
-function log(text, cls = '', fx = null, pic = null){
-  J.log.push({ text, cls, fx }); if (J.log.length > 60) J.log.shift();
-  renderJourney(); toast(text, cls, fx, pic);
+function log(text, cls = '', fx = null, pic = null, bond = null){
+  J.log.push({ text, cls, fx, bond }); if (J.log.length > 60) J.log.shift();
+  renderJourney(); toast(text, cls, fx, pic, bond);
 }
 const toastEl = $('toast');
-const TOAST_TAG = { arrive: 'ARRIVED', pick: 'MY CHOICE', evo: 'EVOLUTION', 'evo sp': 'SPECIAL EVOLUTION', secret: 'NEW SIGNAL', sys: 'SYSTEM' };
+const TOAST_TAG = { bond: 'BOND', arrive: 'ARRIVED', pick: 'MY CHOICE', evo: 'EVOLUTION', 'evo sp': 'SPECIAL EVOLUTION', secret: 'NEW SIGNAL', sys: 'SYSTEM' };
 let toastTimer = 0;
-function toast(text, cls = '', fx = null, pic = null){
+function toast(text, cls = '', fx = null, pic = null, bond = null){
   clearTimeout(toastTimer);
   toastEl.className = 'toast ' + cls;
   const img = pic ? picTag(pic, 't-pic') : '';
   toastEl.classList.toggle('with-pic', !!img);
-  toastEl.innerHTML = `${img}<div class="t-body"><div class="tag">${TOAST_TAG[cls] || 'EVENT'} · ${J ? J.exp : 0} STEPS</div><p>${esc(text)}</p>${fx ? `<em>${fxChips(fx)}</em>` : ''}</div>`;
+  toastEl.innerHTML = `${img}<div class="t-body"><div class="tag">${TOAST_TAG[cls] || 'EVENT'} · ${J ? J.exp : 0} STEPS</div><p>${esc(text)}</p>${fx || (bond && bond.d) ? `<em>${fxChips(fx)}${bondChip(bond)}</em>` : ''}</div>`;
   toastEl.hidden = false; requestAnimationFrame(() => toastEl.classList.add('in'));
   toastTimer = setTimeout(hideToast, 7000 / (NET.speed || 1));
 }
@@ -280,7 +301,7 @@ function applyEvolution(evo){
 }
 async function playEvolution(evo, kind = 'EVOLUTION'){
   const me = J, cap = capacity(evo.name, evo.stage), from = J.form;
-  await window.evoCinematic.play({ from, to: evo.name, partner: evo.partner, desc: infoOf(evo.name), kind, fromCap: capacity(from, J.stage), label: [evo.label || evo.special || stageLabel(evo.stage), ATTR[attrOf(evo.name)][0]].join(' · '), cap, speed: () => NET.speed || 1, alive: () => J === me });
+  await window.evoCinematic.play({ from, to: evo.name, partner: evo.partner, desc: infoOf(evo.name), kind, attr: attrOf(evo.name), fromCap: capacity(from, J.stage), label: [evo.label || evo.special || stageLabel(evo.stage), ATTR[attrOf(evo.name)][0]].join(' · '), cap, speed: () => NET.speed || 1, alive: () => J === me });
   if (J !== me) return;
   await NET.evolveFx({ label: evo.name, img: null, sub: `${kind} · ${evo.label || evo.special || stageLabel(evo.stage)} · ${cap}`, title: `${from}${ga(from)} ${evo.name}${ro(evo.name)} 진화!` });
   if (J !== me) return;
@@ -346,7 +367,7 @@ async function travel(region){
   log(`${name}에 도착했어요. ${pickFrom(evs)}`, 'arrive');
   if (evo) {
     const from = J.form;
-    await window.evoCinematic.play({ from, to: evo.name, desc: infoOf(evo.name), kind: 'SPECIAL EVOLUTION', label: evo.special, cap: capacity(evo.name, 4), speed: () => NET.speed || 1, alive: () => J === me });
+    await window.evoCinematic.play({ from, to: evo.name, desc: infoOf(evo.name), kind: 'SPECIAL EVOLUTION', attr: attrOf(evo.name), label: evo.special, cap: capacity(evo.name, 4), speed: () => NET.speed || 1, alive: () => J === me });
     if (J !== me) return;
     applyEvolution(evo);
     log(`${from}${ga(from)} ${evo.name}${ro(evo.name)} 진화했어요! (${evo.special} · ${capacity(evo.name, 4)})`, 'evo sp', null, evo.name);
@@ -385,7 +406,8 @@ async function roam(region, me){
         const fresh = JD.roam.filter(e => !recentSrc.has(e)), pool = fresh.length ? fresh : JD.roam;
         const ev = pickFrom(pool), mon = pickFrom(wildOf(region.name));
         const fx = gain(ev.fx, JD.statGain.roam); addTraits(fx);
-        log(fill(ev.t, region.name, mon), '', fx); J.log[J.log.length - 1].src = ev;
+        const bd = addBond(mon, ev.fx && ev.fx.dark ? JD.bond.roamDark : JD.bond.roam);
+        log(fill(ev.t, region.name, mon), '', fx, null, bd); J.log[J.log.length - 1].src = ev; bondUp(bd);
       }
     }
     await maybeEvolve(); if (J !== me) return;
@@ -416,11 +438,13 @@ function buildOptions(region){
   }).sort((x, y) => y.w - x.w);
   const picks = [], used = new Set();
   for (const { a } of weighted) { const main = Object.keys(a.fx).sort((p, q) => a.fx[q] - a.fx[p])[0]; if (used.has(main)) continue; used.add(main); picks.push(a); if (picks.length === 3) break; }
-  const opts = picks.map(a => ({ text: fill(a.t, net, pickFrom(mons)), fx: gain(a.fx, JD.statGain.choice) }));
-  // 조그레스: 지금 모습에 맞는 실제 조합이 있을 때 가끔
-  const jg = !J.special && !J.jogressed && JD.jogress.find(j => j.a === J.form);
-  if (jg && r() < JD.jogressChance) {
-    opts[2] = { text: `${net}에서 만난 ${jg.b}${wa(jg.b)} 마음이 통했다. 힘을 합쳐 조그레스 진화!`, fx: gain({ friend: 2 }, JD.statGain.choice), kind: 'jogress', jg };
+  const opts = picks.map(a => { const m = pickFrom(mons); return { text: fill(a.t, net, m), fx: gain(a.fx, JD.statGain.choice), mon: m, bond: actBond(a.fx) }; });
+  // 조그레스: 지금 모습의 짝과 친밀도가 충분하면 언제나 고를 수 있고, 아직이면 짝이 가끔 찾아와 친해질 기회가 생겨요
+  const jg = jogPair();
+  if (jg && bondOf(jg.b) >= JD.bond.jogress) {
+    opts[2] = { text: `${net}에서 ${jg.b}${wa(jg.b)} 마음이 완전히 하나가 되었다. 힘을 합쳐 조그레스 진화!`, fx: gain({ friend: 2 }, JD.statGain.choice), kind: 'jogress', jg };
+  } else if (jg && r() < JD.bond.partnerVisit) {
+    opts[2] = { text: fill(pickFrom(JD.partnerActs), net, jg.b), fx: gain({ friend: 2 }, JD.statGain.choice), kind: 'bond', mon: jg.b, bond: randInt(JD.bond.partnerGain) };
   } else if (!J.special && !J.capsuled && J.stage <= 1 && r() < JD.capsuleChance) {
     // 캡슐진화: 성장기·성숙기에 디지멘탈 캡슐을 발견
     const pool = JD.digimentals.filter(d => d.armor !== J.form && (!d.rare || r() < .15));
@@ -437,8 +461,8 @@ function offerChoice(region, context = ''){
     <div class="tag">CHOICE · ${esc(region.en)}</div>
     ${context ? `<p class="c-ctx">${esc(context)}</p>` : ''}
     <h3>${esc(region.name)}에서 ${esc(J.form)}${wa(J.form)} 무엇을 할까요?</h3>
-    <div class="c-opts">${opts.map((o, i) => `<button class="c-opt${o.kind ? ' special' : ''}" type="button" data-i="${i}"><span>${esc(o.text)}</span>
-      <em>${o.kind ? `<i class="t-special">${o.kind === 'jogress' ? '조그레스 진화' : '캡슐진화'}</i>` : ''}${fxChips(o.fx)}</em></button>`).join('')}</div>`;
+    <div class="c-opts">${opts.map((o, i) => `<button class="c-opt${o.kind === 'bond' ? ' bondopt' : o.kind ? ' special' : ''}" type="button" data-i="${i}"><span>${esc(o.text)}</span>
+      <em>${o.kind ? `<i class="${o.kind === 'bond' ? 't-bondk' : 't-special'}">${{ jogress: '조그레스 진화', capsule: '캡슐진화', bond: '조그레스 짝' }[o.kind]}</i>` : ''}${fxChips(o.fx)}${bondChip(o.mon && o.bond ? { mon: o.mon, d: Math.max(-bondOf(o.mon), Math.min(JD.bond.max - bondOf(o.mon), o.bond)) } : null)}</em></button>`).join('')}</div>`;
   choiceEl.hidden = false; requestAnimationFrame(() => choiceEl.classList.add('in'));
   return new Promise(res => {
     choiceDone = res;
@@ -449,9 +473,11 @@ function offerChoice(region, context = ''){
 async function choose(opt){
   hideChoice();
   addTraits(opt.fx);
-  log(opt.text, 'pick', opt.fx);
+  const bd = addBond(opt.mon, opt.bond);
+  log(opt.text, 'pick', opt.fx, null, bd);
+  bondUp(bd);
   if (opt.kind === 'jogress') {
-    J.jogressed = true;
+    J.jogressed = true; J.jogPartner = opt.jg.b;
     const st = Math.max(J.stage, opt.jg.stage);
     await playEvolution({ name: opt.jg.result, stage: st, label: `${stageLabel(st)} · 조그레스`, path: `조그레스 진화 (${J.form} + ${opt.jg.b})`, partner: opt.jg.b }, 'JOGRESS EVOLUTION');
   } else if (opt.kind === 'capsule') {
@@ -521,7 +547,8 @@ function renderJourney(){
   $('jRoute').innerHTML = J.route.map((r, i) => `<li class="${r.special ? 'sp' : ''}" data-i="${i}" tabindex="0" role="button" aria-label="${esc(r.form)} 자세히 보기">${picTag(r.form, 'r-pic')}<b>${esc(r.form)}</b><small>${r.regions.length ? esc(r.regions.join('·')) : (i === J.route.length - 1 ? '지금 여기' : '—')}</small></li>`).join('');
   $('jRoute').scrollLeft = $('jRoute').scrollWidth;
   $('jTraits').innerHTML = TRAITS.map(t => `<div class="tr t-${t}"><span>${JD.traits[t]}</span><div class="bar"><i style="width:${J.traits[t] / JD.statMax * 100}%"></i></div><b>${J.traits[t]}</b></div>`).join('');
-  $('jLog').innerHTML = J.log.slice(-6).map(l => `<li class="${l.cls}">${esc(l.text)}${l.fx ? ` <em>${fxChips(l.fx)}</em>` : ''}</li>`).join('');
+  $('jBonds').innerHTML = bondsHTML(); fillSil($('jBonds'));
+  $('jLog').innerHTML = J.log.slice(-6).map(l => `<li class="${l.cls}">${esc(l.text)}${l.fx || (l.bond && l.bond.d) ? ` <em>${fxChips(l.fx)}${bondChip(l.bond)}</em>` : ''}</li>`).join('');
   $('jLog').scrollTop = $('jLog').scrollHeight;
   $('jProg').style.width = Math.min(100, J.exp / JD.journeyEnd * 100) + '%';
   const nx = J.special ? null : JD.evolveNeed[J.stage];
@@ -534,18 +561,35 @@ function renderJourney(){
   $('jEnd').disabled = J.busy;
   if (!infoEl.hidden) openInfo(Math.min(+infoEl.dataset.i, J.route.length - 1));   // 열려 있으면 새 정보로
 }
+// 친밀도 목록: 지금 모습의 조그레스 짝(못 만났으면 실루엣)을 맨 위에, 그다음 친한 순서로 최대 3명
+function bondsHTML(){
+  const jg = jogPair(), rows = [];
+  if (jg) rows.push([jg.b, bondOf(jg.b), 'pair']);
+  if (J.jogPartner) rows.push([J.jogPartner, bondOf(J.jogPartner), 'done']);
+  Object.entries(J.bonds).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1])
+    .forEach(([n, v]) => { if (rows.length < 3 && !rows.some(r => r[0] === n)) rows.push([n, v, '']); });
+  if (!rows.length) return '<p class="b-empty">♥ 여행하며 만난 디지몬과 친해지면 여기에 친밀도가 쌓여요.</p>';
+  return `<ul class="b-list" aria-label="친밀도">${rows.map(([n, v, role]) => {
+    const met = v > 0, ready = role === 'pair' && v >= JD.bond.jogress;
+    const tag = role === 'pair' ? `<i class="b-tag${ready ? ' ready' : ''}">${ready ? '조그레스 가능!' : `조그레스 짝 · ${JD.bond.jogress} 필요`}</i>` : role === 'done' ? '<i class="b-tag done">조그레스 완료</i>' : '';
+    return `<li class="${role}${ready ? ' ready' : ''}">${met ? (picTag(n, 'b-pic') || '<span class="b-pic"></span>') : silTag(n)}
+      <div class="b-main"><div class="b-top"><b>${met ? esc(n) : '???'}</b><small>${met ? bondTier(v) : '아직 만나지 못했어요'}</small>${tag}</div>
+      <div class="b-bar"${role === 'pair' ? ` style="--need:${JD.bond.jogress}%"` : ''}><i style="width:${v}%"></i></div></div><em>${v}</em></li>`;
+  }).join('')}</ul>`;
+}
 function showLog(final = false){
   if (!J || J.busy) return;
   $('journey').hidden = true; hideChoice();
   const sp = J.special;
   const topT = [...TRAITS].sort((a, b) => J.traits[b] - J.traits[a])[0];
+  const best = Object.entries(J.bonds).sort((a, b) => b[1] - a[1])[0];
   card.innerHTML = `
     <div class="tag">${final ? 'JOURNEY COMPLETE' : 'JOURNEY LOG'} · ${J.moves} TRIPS · ${J.exp} STEPS · ${J.visited.size} REGIONS</div>
     ${final ? '<p class="eyebrow">여행의 끝</p>' : ''}
     ${picOf(J.form) ? `<div class="sum-pic">${picTag(J.form, '')}</div>` : ''}
     <h2 class="sum-title">${esc(J.form)}</h2>
     <p class="cap-line">${esc(J.label)} · ${capacity(J.form, J.stage)}</p>
-    <p class="desc">${esc(J.dg.ko)}${wa(J.dg.ko)} 함께 ${J.moves}번 이동하고 ${J.exp}걸음을 걸으며 ${J.visited.size}개 구역을 여행했어요. 가장 강한 성향은 <b class="spt">${JD.traits[topT]}</b>${bat(JD.traits[topT]) > 0 ? '이에요' : '예요'}.${sp ? ` 숨겨진 구역을 찾아 <b class="spt">${sp}</b>${ro(sp)} 특별 진화했어요!` : ''}</p>
+    <p class="desc">${esc(J.dg.ko)}${wa(J.dg.ko)} 함께 ${J.moves}번 이동하고 ${J.exp}걸음을 걸으며 ${J.visited.size}개 구역을 여행했어요. 가장 강한 성향은 <b class="spt">${JD.traits[topT]}</b>${bat(JD.traits[topT]) > 0 ? '이에요' : '예요'}.${best && best[1] > 0 ? ` 가장 친한 친구는 <b class="spt">${esc(best[0])}</b>(${bondTier(best[1])} · 친밀도 ${best[1]})${bat(best[0]) > 0 ? '이에요' : '예요'}.` : ''}${sp ? ` 숨겨진 구역을 찾아 <b class="spt">${sp}</b>${ro(sp)} 특별 진화했어요!` : ''}</p>
     <ol class="timeline">${J.route.map(r => `<li class="${r.special ? 'sp' : ''}"><span class="st">${esc(r.label)}<br>${esc(r.cap)}</span><b>${picTag(r.form, 'tl-pic')}${esc(r.form)}</b><small>${esc(r.path)}${r.regions.length ? ' · ' + esc(r.regions.join(' → ')) : ''}</small></li>`).join('')}</ol>
     <div class="actions">
       <button class="ghost primary" id="jCont" type="button">계속 여행하기</button>
@@ -568,7 +612,7 @@ netc.addEventListener('pointermove', e => { if (J && !J.busy && card.hidden && !
 netc.addEventListener('pointerleave', () => { NET.hover = -1; });
 netc.addEventListener('click', e => { if (J && !J.busy && !NET.pinching) travel(NET.regionAt(e.clientX, e.clientY)); });
 // 개발용: 주소 끝에 #debug를 붙이면 콘솔에서 __digi.travel(구역번호)로 이동을, __digi.evolve({name, stage, label, partner}, 'JOGRESS EVOLUTION')로 진화 연출을 시험할 수 있어요
-if (location.hash === '#debug') window.__digi = { travel, evolve: playEvolution, candidates: k => evoCandidates(k ?? J.stage), render: () => renderJourney(), net: NET, get journey(){ return J; } };
+if (location.hash === '#debug') window.__digi = { bond: (n, v) => { J.bonds[n] = v; renderJourney(); }, travel, evolve: playEvolution, candidates: k => evoCandidates(k ?? J.stage), render: () => renderJourney(), net: NET, get journey(){ return J; } };
 $('jEnd').addEventListener('click', () => showLog());
 $('jHome').addEventListener('click', closeNet);
 document.querySelectorAll('#rot [data-rot]').forEach(b => {
