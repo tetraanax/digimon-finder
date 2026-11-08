@@ -216,6 +216,117 @@ function bondUp(b){
   const jg = jogPair(), ready = jg && jg.b === b.mon && b.v >= JD.bond.jogress;
   log(`${b.mon}${wa(b.mon)} ${b.up}${ga(b.up)} 되었어요! (친밀도 ${b.v})${ready ? ' 이제 함께 조그레스 진화를 할 수 있어요.' : ''}`, 'bond', null, b.mon);
 }
+/* ---------- 사건 엔진: 걸음마다 하나의 사건 (대부분 저절로, 갈림길에서만 선택) ---------- */
+// 여정 지도 칸의 종류와 색
+const CAT = { choice: ['선택', '#f1f5f9'], daily: ['일상', '#334155'], local: ['구역 사건', '#7dd3fc'], danger: ['위기', '#f43f5e'], luck: ['행운', '#4ade80'],
+  rare: ['희귀', '#facc15'], bond: ['인연', '#f472b6'], world: ['세계 사건', '#818cf8'], chain: ['되돌아온 일', '#fb923c'], rest: ['휴식', '#94a3b8'], evo: ['진화', '#c084fc'] };
+function savedFocus(){ try { const f = localStorage.getItem('digi-focus'); return JD.focus[f] ? f : 'free'; } catch (e) { return 'free'; } }
+function mark(cat){ if (!J.exp) return; const i = J.exp - 1; if (J.map[i] && J.map[i] !== 'daily') return; J.map[i] = cat; }
+function addCond(d){ if (!d) return 0; const b = J.cond; J.cond = Math.max(0, Math.min(100, J.cond + d)); return J.cond - b; }
+const condChip = c => c ? `<i class="t-cond${c < 0 ? ' neg' : ''}">컨디션 ${c > 0 ? '+' : ''}${c}</i>` : '';
+// 컨디션이 낮으면 성장이 절반
+const gainC = (fx, scale) => gain(fx, scale * (J.cond < JD.cond.low ? .5 : 1));
+const isDarkNet = net => JD.darkNets.some(k => net.includes(k));
+const curWorld = () => J.world ? JD.worlds[J.world.i] : null;
+function rate(kind){
+  const f = JD.focus[J.focus] || {}, w = curWorld();
+  return (JD.rates[kind] ?? 1) * ((f.mod && f.mod[kind]) || 1) * ((w && w.mod && w.mod[kind]) || 1);
+}
+// 훈련 방침: 걸음마다 조금씩 성장 + 컨디션 회복 (기록에는 남기지 않아요)
+function applyFocus(){
+  const f = JD.focus[J.focus] || JD.focus.free, w = curWorld();
+  addCond(JD.cond.regen + (f.cond || 0) + ((w && w.regen) || 0));
+  if (!f.gain) return;
+  const t = f.trait || pickFrom(['courage', 'friend', 'wisdom', 'power']);
+  const v = Math.round((f.gain + Math.floor(Math.random() * 3)) * (J.cond < JD.cond.low ? .5 : 1));
+  J.traits[t] = Math.min(JD.statMax, J.traits[t] + v);
+}
+// 저절로 일어나는 사건 하나 (위기 · 행운 · 희귀 공통)
+function simpleEvent(ev, cat, net, mon){
+  const fx = gainC(ev.fx, JD.statGain.roam); addTraits(fx);
+  const c = addCond(ev.cond || 0), bd = ev.bond ? addBond(mon, ev.bond) : null;
+  mark(cat); log(fill(ev.t, net, mon), cat, fx, null, bd, c); bondUp(bd);
+}
+// 갈림길: 사건 문장을 남기고, 그 상황에 맞는 선택지를 내밀어요
+async function forkEvent(ev, cat, region, mon){
+  const f = JD.forks[ev.fork], net = region.name;
+  mark(cat); log(fill(ev.t, net, mon), cat, null, null);
+  const opts = f.opts.map(o => ({ text: o.t, fx: gain(o.fx, JD.statGain.choice), cond: o.cond, mon, bond: o.bond, fork: true }));
+  await offerChoice(region, fill(ev.t, net, mon), opts, f.q);
+}
+// 행동이 씨앗이 되어 몇 걸음 뒤에 되돌아와요
+function scheduleChain(opt){
+  if (!opt.src || !opt.mon || J.pending.length >= 3) return;
+  for (const r of JD.chainRules) {
+    if (!new RegExp(r.match).test(opt.src.t)) continue;
+    const p = r.p * (r.type === 'corrupt' ? rate('corrupt') / (JD.rates.corrupt ?? 1) : 1);
+    if (Math.random() < p) J.pending.push({ type: r.type, mon: opt.mon, at: J.exp + randInt(JD.chainDelay) });
+    return;
+  }
+}
+async function stepEvent(region){
+  const net = region.name, mons = wildOf(net), r = Math.random, jg = jogPair();
+  // 1) 되돌아온 일
+  const due = J.pending.findIndex(p => p.at <= J.exp);
+  if (due >= 0) {
+    const p = J.pending.splice(due, 1)[0], c = JD.chains[p.type];
+    if (c.fork) return forkEvent({ t: c.t, fork: c.fork }, 'chain', region, p.mon);
+    return simpleEvent(c, 'chain', net, p.mon);
+  }
+  // 2) 세계 사건: 끝나거나, 새로 시작
+  if (J.world && J.exp >= J.world.until) { const w = curWorld(); J.world = null; mark('world'); log(`🌐 ${w.end}`, 'world'); return; }
+  if (!J.world && J.exp > 8 && r() < rate('world')) {
+    const i = Math.floor(r() * JD.worlds.length), w = JD.worlds[i];
+    J.world = { i, until: J.exp + randInt(w.dur) };
+    const fx = gainC(w.fx, JD.statGain.roam); addTraits(fx);
+    mark('world'); log(`🌐 세계 사건 · ${w.name} — ${w.start}`, 'world', fx); return;
+  }
+  // 3) 희귀
+  if (r() < rate('rare')) return simpleEvent(pickFrom(JD.rares), 'rare', net, pickFrom(mons));
+  // 4) 조그레스 짝이 찾아와요
+  if (jg && bondOf(jg.b) < JD.bond.jogress && r() < rate('partner')) {
+    const fx = gainC({ friend: 1 }, JD.statGain.roam); addTraits(fx);
+    const bd = addBond(jg.b, randInt(JD.bond.partnerGain));
+    mark('bond'); log(fill(pickFrom(JD.partnerVisits), net, jg.b), 'bond', fx, jg.b, bd); bondUp(bd); return;
+  }
+  // 5) 디지멘탈 캡슐 발견 (성장기 · 성숙기)
+  if (!J.special && !J.capsuled && J.stage <= 1 && r() < rate('capsule')) {
+    const dm = pickFrom(JD.digimentals.filter(d => d.armor !== J.form && (!d.rare || r() < .15)));
+    mark('luck'); log(`${net}에서 빛나는 「${dm.name}의 디지멘탈」 캡슐을 발견했어요.`, 'luck');
+    return offerChoice(region, `「${dm.name}의 디지멘탈」이 은은하게 빛나고 있어요.`, [
+      { text: '캡슐을 열어 캡슐진화한다', fx: gain({ [dm.trait]: 2 }, JD.statGain.choice), kind: 'capsule', dm },
+      { text: '지금의 모습을 지키며 캡슐을 그대로 둔다', fx: gain({ wisdom: 1 }, JD.statGain.choice) },
+    ], JD.forks.capsule.q);
+  }
+  // 6) 위기 (어두운 구역에서 더 자주)
+  if (r() < rate('danger') * (isDarkNet(net) ? 1.5 : 1)) {
+    const d = pickFrom(JD.dangers), mon = pickFrom(mons);
+    if (d.fork) return forkEvent(d, 'danger', region, mon);
+    return simpleEvent(d, 'danger', net, mon);
+  }
+  // 7) 친구 (친밀도 20 이상): 함께 시간을 보내거나, 도움을 청해 와요
+  const friends = Object.entries(J.bonds).filter(([n, v]) => v >= 20 && n !== J.form && !(jg && n === jg.b));
+  if (friends.length && r() < rate('bond')) {
+    const [n] = pickFrom(friends);
+    if (r() < .3) return forkEvent({ t: JD.forks.trouble.ask, fork: 'trouble' }, 'bond', region, n);
+    const fx = gainC({ friend: 1 }, JD.statGain.roam); addTraits(fx);
+    const bd = addBond(n, randInt([5, 10]));
+    mark('bond'); log(fill(pickFrom(JD.bondVisits), net, n), 'bond', fx, n, bd); bondUp(bd); return;
+  }
+  // 8) 행운
+  if (r() < rate('luck')) return simpleEvent(pickFrom(JD.lucks), 'luck', net, pickFrom(mons));
+  // 9) 지쳤을 때는 쉬어 가요
+  if (J.cond < JD.cond.low && r() < .45) { const c = addCond(12); mark('rest'); log(pickFrom(JD.rests), 'rest', null, null, null, c); return; }
+  // 10) 구역 고유 사건 · 11) 평범한 하루 — 최근 기록과 같은 문장은 다시 쓰지 않아요
+  const recentText = new Set(J.log.slice(-10).map(l => l.text)), recentSrc = new Set(J.log.slice(-10).map(l => l.src));
+  const local = (byName(JD.events, net) || []).filter(x => !recentText.has(x) && !recentText.has(`${net}에 도착했어요. ${x}`));
+  if (local.length && r() < rate('local') * 1.8) { mark('local'); log(pickFrom(local), 'local'); return; }
+  const all = JD.roam.concat(JD.roamMore || []), fresh = all.filter(e => !recentSrc.has(e)), pool = fresh.length ? fresh : all;
+  const ev = pickFrom(pool), mon = pickFrom(mons);
+  const fx = gainC(ev.fx, JD.statGain.roam); addTraits(fx);
+  const bd = addBond(mon, ev.fx && ev.fx.dark ? JD.bond.roamDark : JD.bond.roam);
+  mark('daily'); log(fill(ev.t, net, mon), '', fx, null, bd); J.log[J.log.length - 1].src = ev; bondUp(bd);
+}
 function addTraits(fx){ if (fx) for (const [k, v] of Object.entries(fx)) J.traits[k] = Math.min(JD.statMax, J.traits[k] + v); }
 
 function startJourney(){
@@ -223,6 +334,7 @@ function startJourney(){
   J = { dg, stage: 0, form: dg.ko, label: stageLabel(0), moves: 0, exp: 0, ended: false,
         route: [{ form: dg.ko, stage: 0, label: stageLabel(0), cap: capacity(dg.ko, 0), regions: [], path: '시작' }],
         visited: new Set([NET.currentRegion()]), recent: [], special: null, branch: null, capsuled: false, jogressed: false, bonds: {}, jogPartner: null,
+        cond: JD.cond.start, focus: savedFocus(), map: [], count: {}, choices: 0, pending: [], world: null, lastJog: -99,
         busy: false, choosing: false, traits: Object.fromEntries(TRAITS.map(t => [t, 0])), log: [] };
   NET.speed = 1; $('jFast').classList.remove('on');
   hideCard(); hideChoice();
@@ -239,19 +351,20 @@ function endJourney(){
 function idleStatus(){
   $('netStat').innerHTML = `EXPLORE · ${J.moves} TRIPS · ${J.exp} STEPS · ${esc(NET.regionName(NET.currentRegion()) || 'DEEP WEB')}<b>가고 싶은 구역을 눌러 주세요</b>`;
 }
-function log(text, cls = '', fx = null, pic = null, bond = null){
-  J.log.push({ text, cls, fx, bond }); if (J.log.length > 60) J.log.shift();
-  renderJourney(); toast(text, cls, fx, pic, bond);
+function log(text, cls = '', fx = null, pic = null, bond = null, cond = 0){
+  J.log.push({ text, cls, fx, bond, cond }); if (J.log.length > 60) J.log.shift();
+  renderJourney(); toast(text, cls, fx, pic, bond, cond);
 }
+const chipsOf = (fx, bond, cond) => fx || (bond && bond.d) || cond ? `<em>${fxChips(fx)}${bondChip(bond)}${condChip(cond)}</em>` : '';
 const toastEl = $('toast');
-const TOAST_TAG = { bond: 'BOND', arrive: 'ARRIVED', pick: 'MY CHOICE', evo: 'EVOLUTION', 'evo sp': 'SPECIAL EVOLUTION', secret: 'NEW SIGNAL', sys: 'SYSTEM' };
+const TOAST_TAG = { danger: 'DANGER', luck: 'LUCKY', rare: 'RARE EVENT', world: 'WORLD EVENT', chain: 'CONSEQUENCE', rest: 'REST', local: 'LOCAL', bond: 'BOND', arrive: 'ARRIVED', pick: 'MY CHOICE', evo: 'EVOLUTION', 'evo sp': 'SPECIAL EVOLUTION', secret: 'NEW SIGNAL', sys: 'SYSTEM' };
 let toastTimer = 0;
-function toast(text, cls = '', fx = null, pic = null, bond = null){
+function toast(text, cls = '', fx = null, pic = null, bond = null, cond = 0){
   clearTimeout(toastTimer);
   toastEl.className = 'toast ' + cls;
   const img = pic ? picTag(pic, 't-pic') : '';
   toastEl.classList.toggle('with-pic', !!img);
-  toastEl.innerHTML = `${img}<div class="t-body"><div class="tag">${TOAST_TAG[cls] || 'EVENT'} · ${J ? J.exp : 0} STEPS</div><p>${esc(text)}</p>${fx || (bond && bond.d) ? `<em>${fxChips(fx)}${bondChip(bond)}</em>` : ''}</div>`;
+  toastEl.innerHTML = `${img}<div class="t-body"><div class="tag">${TOAST_TAG[cls] || 'EVENT'} · ${J ? J.exp : 0} STEPS</div><p>${esc(text)}</p>${chipsOf(fx, bond, cond)}</div>`;
   toastEl.hidden = false; requestAnimationFrame(() => toastEl.classList.add('in'));
   toastTimer = setTimeout(hideToast, 7000 / (NET.speed || 1));
 }
@@ -306,7 +419,8 @@ async function playEvolution(evo, kind = 'EVOLUTION'){
   await NET.evolveFx({ label: evo.name, img: null, sub: `${kind} · ${evo.label || evo.special || stageLabel(evo.stage)} · ${cap}`, title: `${from}${ga(from)} ${evo.name}${ro(evo.name)} 진화!` });
   if (J !== me) return;
   applyEvolution(evo);
-  log(`${from}${ga(from)} ${evo.name}${ro(evo.name)} 진화했어요! (${evo.path} · ${cap})`, 'evo', null, evo.name);
+  const healed = addCond(JD.cond.evolveHeal); if (J.exp) J.map[J.exp - 1] = 'evo';
+  log(`${from}${ga(from)} ${evo.name}${ro(evo.name)} 진화했어요! (${evo.path} · ${cap})`, 'evo', null, evo.name, null, healed);
 }
 // 진화 조건: 가장 높은 능력치·능력치 합계·최소 걸음 수
 const statTop = () => Math.max(...TRAITS.map(t => J.traits[t]));
@@ -315,7 +429,7 @@ const evoReady = need => J.exp >= need.steps && statTop() >= need.top && statSum
 async function maybeEvolve(){
   if (J.special) return;
   const k = J.stage, need = JD.evolveNeed[k];
-  if (need && evoReady(need)) await playEvolution(decideEvolution(k));
+  if (need && evoReady(need) && J.cond >= JD.cond.evolveMin) await playEvolution(decideEvolution(k));
 }
 
 /* ---------- hidden zones: conditions are never shown on screen ---------- */
@@ -369,7 +483,7 @@ async function travel(region){
     const from = J.form;
     await window.evoCinematic.play({ from, to: evo.name, desc: infoOf(evo.name), kind: 'SPECIAL EVOLUTION', attr: attrOf(evo.name), label: evo.special, cap: capacity(evo.name, 4), speed: () => NET.speed || 1, alive: () => J === me });
     if (J !== me) return;
-    applyEvolution(evo);
+    applyEvolution(evo); if (J.exp) J.map[J.exp - 1] = 'evo';
     log(`${from}${ga(from)} ${evo.name}${ro(evo.name)} 진화했어요! (${evo.special} · ${capacity(evo.name, 4)})`, 'evo sp', null, evo.name);
   }
   checkUnlocks();
@@ -381,35 +495,25 @@ async function travel(region){
 }
 async function roam(region, me){
   NET.setStay(true, region.id);
-  const steps = randInt(JD.roamSteps), nChoice = Math.min(steps, randInt(JD.roamChoices));
-  const slots = new Set();
-  while (slots.size < nChoice - 1) slots.add(2 + Math.floor(Math.random() * (steps - 2)));
+  const steps = randInt(JD.roamSteps);
   if (!(await sleep(JD.roamPause * .6, me))) return;
-  // first thing on arrival: decide what to do here
-  J.exp++;
-  const arrived = [...J.log].reverse().find(l => l.cls === 'arrive');
-  await offerChoice(region, arrived ? arrived.text : ''); if (J !== me) return;
-  await maybeEvolve(); if (J !== me) return;
-  checkUnlocks();
-  if (!(await sleep(JD.roamPause, me))) return;
-  for (let i = 1; i < steps; i++) {
-    await NET.wander(region.id, `${region.name} 탐험 중 · ${i + 1} / ${steps}`);
+  for (let i = 0; i < steps; i++) {
+    if (i > 0) { await NET.wander(region.id, `${region.name} 탐험 중 · ${i + 1} / ${steps}`); if (J !== me) return; }
+    J.exp++; applyFocus();
+    const jg = jogPair();
+    if (jg && bondOf(jg.b) >= JD.bond.jogress && J.exp - J.lastJog >= 4) {
+      // 갈림길: 짝과 마음이 하나가 되면 조그레스를 할지 물어요 (고르지 않으면 몇 걸음 뒤에 다시)
+      J.lastJog = J.exp; mark('bond');
+      await offerChoice(region, `${jg.b}${ga(jg.b)} 곁에서 함께 빛나고 있어요.`, [
+        { text: `${jg.b}${wa(jg.b)} 힘을 합쳐 조그레스 진화한다`, fx: gain({ friend: 2 }, JD.statGain.choice), kind: 'jogress', jg },
+        { text: '아직은 지금의 모습으로 함께 여행한다', fx: gain({ friend: 1 }, JD.statGain.choice), mon: jg.b, bond: 2 },
+      ], JD.forks.jogress.q);
+    } else if (Math.random() < (i === 0 ? JD.pace.choiceArrive : JD.pace.choiceRoam)) {
+      const arrived = i === 0 ? [...J.log].reverse().find(l => l.cls === 'arrive') : null;
+      await offerChoice(region, arrived ? arrived.text : '');
+    } else await stepEvent(region);
     if (J !== me) return;
-    J.exp++;
-    if (slots.has(i)) { await offerChoice(region); if (J !== me) return; }
-    else {
-      // 최근 기록과 같은 문장은 다시 쓰지 않아요 (구역 사건이 한두 개뿐인 숨겨진 구역에서 같은 줄이 반복되던 문제)
-      const recentText = new Set(J.log.slice(-10).map(l => l.text)), recentSrc = new Set(J.log.slice(-10).map(l => l.src));
-      const local = (byName(JD.events, region.name) || []).filter(x => !recentText.has(x) && !recentText.has(`${region.name}에 도착했어요. ${x}`));
-      if (local.length && Math.random() < .25) log(pickFrom(local));
-      else {
-        const fresh = JD.roam.filter(e => !recentSrc.has(e)), pool = fresh.length ? fresh : JD.roam;
-        const ev = pickFrom(pool), mon = pickFrom(wildOf(region.name));
-        const fx = gain(ev.fx, JD.statGain.roam); addTraits(fx);
-        const bd = addBond(mon, ev.fx && ev.fx.dark ? JD.bond.roamDark : JD.bond.roam);
-        log(fill(ev.t, region.name, mon), '', fx, null, bd); J.log[J.log.length - 1].src = ev; bondUp(bd);
-      }
-    }
+    mark('daily');
     await maybeEvolve(); if (J !== me) return;
     checkUnlocks();
     if (!(await sleep(JD.roamPause, me))) return;
@@ -418,7 +522,7 @@ async function roam(region, me){
   NET.setStay(false);
 }
 
-/* ---------- action choices (2–3 per region) ---------- */
+/* ---------- 선택지: 행동 선택(가끔) · 갈림길(조그레스 · 캡슐 · 위기 · 친구 · 되돌아온 일) ---------- */
 const choiceEl = $('choice');
 let choiceDone = null;
 function hideChoice(){
@@ -438,44 +542,50 @@ function buildOptions(region){
   }).sort((x, y) => y.w - x.w);
   const picks = [], used = new Set();
   for (const { a } of weighted) { const main = Object.keys(a.fx).sort((p, q) => a.fx[q] - a.fx[p])[0]; if (used.has(main)) continue; used.add(main); picks.push(a); if (picks.length === 3) break; }
-  const opts = picks.map(a => { const m = pickFrom(mons); return { text: fill(a.t, net, m), fx: gain(a.fx, JD.statGain.choice), mon: m, bond: actBond(a.fx) }; });
-  // 조그레스: 지금 모습의 짝과 친밀도가 충분하면 언제나 고를 수 있고, 아직이면 짝이 가끔 찾아와 친해질 기회가 생겨요
-  const jg = jogPair();
-  if (jg && bondOf(jg.b) >= JD.bond.jogress) {
-    opts[2] = { text: `${net}에서 ${jg.b}${wa(jg.b)} 마음이 완전히 하나가 되었다. 힘을 합쳐 조그레스 진화!`, fx: gain({ friend: 2 }, JD.statGain.choice), kind: 'jogress', jg };
-  } else if (jg && r() < JD.bond.partnerVisit) {
-    opts[2] = { text: fill(pickFrom(JD.partnerActs), net, jg.b), fx: gain({ friend: 2 }, JD.statGain.choice), kind: 'bond', mon: jg.b, bond: randInt(JD.bond.partnerGain) };
-  } else if (!J.special && !J.capsuled && J.stage <= 1 && r() < JD.capsuleChance) {
-    // 캡슐진화: 성장기·성숙기에 디지멘탈 캡슐을 발견
-    const pool = JD.digimentals.filter(d => d.armor !== J.form && (!d.rare || r() < .15));
-    const dm = pickFrom(pool);
-    opts[2] = { text: `${net}에서 빛나는 「${dm.name}의 디지멘탈」 캡슐을 발견했다. 캡슐진화!`, fx: gain({ [dm.trait]: 2 }, JD.statGain.choice), kind: 'capsule', dm };
-  }
-  return opts;
+  return picks.map(a => { const m = pickFrom(mons); return { text: fill(a.t, net, m), fx: gainC(a.fx, JD.statGain.choice), mon: m, bond: actBond(a.fx), src: a }; });
 }
-function offerChoice(region, context = ''){
+let autoTimer = 0;
+// 자동 선택: 훈련 방침과 가장 잘 맞는 선택지를 미리 골라 두고, 시간이 지나면 그걸로 정해요
+function autoPick(opts){
+  const f = JD.focus[J.focus] || {}, t = f.trait;
+  let best = 0, bs = -1e9;
+  opts.forEach((o, i) => {
+    let sc = Math.random() * 3 + (o.kind ? 60 : 0) + (t && o.fx ? (o.fx[t] || 0) : 0) + (J.focus === 'rest' || J.cond < 45 ? (o.cond || 0) * 1.5 : 0) + (o.bond || 0) * .3;
+    if (sc > bs) { bs = sc; best = i; }
+  });
+  return best;
+}
+function offerChoice(region, context = '', custom = null, question = ''){
   clearTimeout(toastTimer); toastEl.classList.remove('in'); toastEl.hidden = true;
-  const opts = buildOptions(region);
+  const opts = custom || buildOptions(region);
+  if (!custom) mark('choice');
+  J.choices++;
   J.choosing = true; netEl.classList.add('choosing');
+  const auto = autoOn(), pre = autoPick(opts), wait = JD.pace.autoPickMs / (NET.speed || 1);
   choiceEl.innerHTML = `
-    <div class="tag">CHOICE · ${esc(region.en)}</div>
+    <div class="tag">${custom ? 'TURNING POINT' : 'CHOICE'} · ${esc(region.en)}</div>
     ${context ? `<p class="c-ctx">${esc(context)}</p>` : ''}
-    <h3>${esc(region.name)}에서 ${esc(J.form)}${wa(J.form)} 무엇을 할까요?</h3>
-    <div class="c-opts">${opts.map((o, i) => `<button class="c-opt${o.kind === 'bond' ? ' bondopt' : o.kind ? ' special' : ''}" type="button" data-i="${i}"><span>${esc(o.text)}</span>
-      <em>${o.kind ? `<i class="${o.kind === 'bond' ? 't-bondk' : 't-special'}">${{ jogress: '조그레스 진화', capsule: '캡슐진화', bond: '조그레스 짝' }[o.kind]}</i>` : ''}${fxChips(o.fx)}${bondChip(o.mon && o.bond ? { mon: o.mon, d: Math.max(-bondOf(o.mon), Math.min(JD.bond.max - bondOf(o.mon), o.bond)) } : null)}</em></button>`).join('')}</div>`;
+    <h3>${esc(question || `${region.name}에서 ${J.form}${wa(J.form)} 무엇을 할까요?`)}</h3>
+    ${auto ? `<div class="c-auto" aria-hidden="true"><i style="animation-duration:${wait}ms"></i><span>자동 선택</span></div>` : ''}
+    <div class="c-opts">${opts.map((o, i) => `<button class="c-opt${o.kind === 'bond' ? ' bondopt' : o.kind ? ' special' : ''}${auto && i === pre ? ' pre' : ''}" type="button" data-i="${i}"><span>${esc(o.text)}</span>
+      <em>${o.kind ? `<i class="${o.kind === 'bond' ? 't-bondk' : 't-special'}">${{ jogress: '조그레스 진화', capsule: '캡슐진화', bond: '조그레스 짝' }[o.kind]}</i>` : ''}${fxChips(o.fx)}${bondChip(o.mon && o.bond ? { mon: o.mon, d: Math.max(-bondOf(o.mon), Math.min(JD.bond.max - bondOf(o.mon), o.bond)) } : null)}${condChip(o.cond)}</em></button>`).join('')}</div>`;
   choiceEl.hidden = false; requestAnimationFrame(() => choiceEl.classList.add('in'));
   return new Promise(res => {
     choiceDone = res;
-    choiceEl.querySelectorAll('.c-opt').forEach(b => b.onclick = async () => { choiceDone = null; await choose(opts[+b.dataset.i]); res(); });
+    const pick = async i => { clearTimeout(autoTimer); if (choiceDone !== res) return; choiceDone = null; await choose(opts[i]); res(); };
+    choiceEl.querySelectorAll('.c-opt').forEach(b => b.onclick = () => pick(+b.dataset.i));
     choiceEl.querySelector('.c-opt').focus({ preventScroll: true });
+    clearTimeout(autoTimer);
+    if (auto) autoTimer = setTimeout(() => pick(pre), wait);
   });
 }
 async function choose(opt){
   hideChoice();
   addTraits(opt.fx);
-  const bd = addBond(opt.mon, opt.bond);
-  log(opt.text, 'pick', opt.fx, null, bd);
+  const c = addCond(opt.cond || 0), bd = addBond(opt.mon, opt.bond);
+  log(opt.fork ? `→ ${opt.text}` : opt.text, 'pick', opt.fx, null, bd, c);
   bondUp(bd);
+  scheduleChain(opt);
   if (opt.kind === 'jogress') {
     J.jogressed = true; J.jogPartner = opt.jg.b;
     const st = Math.max(J.stage, opt.jg.stage);
@@ -548,14 +658,19 @@ function renderJourney(){
   $('jRoute').scrollLeft = $('jRoute').scrollWidth;
   $('jTraits').innerHTML = TRAITS.map(t => `<div class="tr t-${t}"><span>${JD.traits[t]}</span><div class="bar"><i style="width:${J.traits[t] / JD.statMax * 100}%"></i></div><b>${J.traits[t]}</b></div>`).join('');
   $('jBonds').innerHTML = bondsHTML(); fillSil($('jBonds'));
-  $('jLog').innerHTML = J.log.slice(-6).map(l => `<li class="${l.cls}">${esc(l.text)}${l.fx || (l.bond && l.bond.d) ? ` <em>${fxChips(l.fx)}${bondChip(l.bond)}</em>` : ''}</li>`).join('');
+  const w = curWorld(), cl = J.cond < JD.cond.low ? 'low' : J.cond < 60 ? 'mid' : '';
+  $('jStatus').innerHTML = `<div class="cond ${cl}" title="컨디션: 다치면 내려가고 걸음마다 회복해요. ${JD.cond.low} 아래면 성장이 절반, ${JD.cond.evolveMin} 아래면 진화가 미뤄져요"><span>컨디션</span><div class="bar"><i style="width:${J.cond}%"></i></div><b>${J.cond}</b></div>` +
+    (w ? `<span class="world" title="${esc(w.start)}">🌐 ${esc(w.name)} · ${Math.max(0, J.world.until - J.exp)}걸음</span>` : '');
+  const fc = JD.focus[J.focus] || JD.focus.free;
+  $('jFocus').innerHTML = `<span class="f-h">훈련 방침</span><div class="f-list">${Object.entries(JD.focus).map(([k, f]) => `<button type="button" class="f-b${k === J.focus ? ' on' : ''}" data-f="${k}" role="radio" aria-checked="${k === J.focus}" title="${esc(f.desc)}"><i aria-hidden="true">${f.icon}</i>${esc(f.name)}</button>`).join('')}</div><p class="f-desc">${esc(fc.desc)}</p>`;
+  $('jLog').innerHTML = J.log.slice(-6).map(l => `<li class="${l.cls}">${esc(l.text)}${chipsOf(l.fx, l.bond, l.cond) ? ' ' + chipsOf(l.fx, l.bond, l.cond) : ''}</li>`).join('');
   $('jLog').scrollTop = $('jLog').scrollHeight;
   $('jProg').style.width = Math.min(100, J.exp / JD.journeyEnd * 100) + '%';
   const nx = J.special ? null : JD.evolveNeed[J.stage];
   const found = JD.secrets.filter(d => NET.unlocked.has(NET.regionId(d.region)));
   const cands = nx ? evoCandidates(J.stage) : [];
   const pred = cands.length ? `<div class="j-pred"><span class="jp-h">다음 진화 예상${cands.length > 1 ? ` · ${cands.length}개 중 하나` : ''}<em>${esc(cands[0].path)}</em></span><div class="jp-list">${cands.map(c => `<span class="jp" title="아직 알 수 없는 디지몬">${silTag(c.name)}<b>???</b><i class="${ATTR[c.attr][1]}">${ATTR[c.attr][0]}</i></span>`).join('')}</div></div>` : '';
-  $('jSecret').innerHTML = pred + (nx ? `<p class="j-next">다음 진화 조건 · <span class="${statTop() >= nx.top ? 'ok' : ''}">가장 높은 능력치 ${statTop()}/${nx.top}</span> · <span class="${statSum() >= nx.total ? 'ok' : ''}">합계 ${statSum()}/${nx.total}</span>${J.exp < nx.steps ? ` · <span>${nx.steps - J.exp}걸음 더</span>` : ''}</p>` : '') +
+  $('jSecret').innerHTML = pred + (nx ? `<p class="j-next">다음 진화 조건 · <span class="${statTop() >= nx.top ? 'ok' : ''}">가장 높은 능력치 ${statTop()}/${nx.top}</span> · <span class="${statSum() >= nx.total ? 'ok' : ''}">합계 ${statSum()}/${nx.total}</span>${J.exp < nx.steps ? ` · <span>${nx.steps - J.exp}걸음 더</span>` : ''} · <span class="${J.cond >= JD.cond.evolveMin ? 'ok' : ''}">컨디션 ${J.cond}/${JD.cond.evolveMin}</span></p>` : '') +
     (found.length ? `<p class="hint open" title="지도를 축소해서 찾아보세요">✦ 열린 숨겨진 구역 ${found.map(d => `<span class="zone">${esc(d.region)}</span>`).join('')}</p>` : '');
   fillSil($('jSecret'));
   $('jEnd').disabled = J.busy;
@@ -577,6 +692,14 @@ function bondsHTML(){
       <div class="b-bar"${role === 'pair' ? ` style="--need:${JD.bond.jogress}%"` : ''}><i style="width:${v}%"></i></div></div><em>${v}</em></li>`;
   }).join('')}</ul>`;
 }
+// 여정 지도: 한 칸이 한 걸음. 무슨 일이 있었는지 색으로 보여요
+function journeyMap(){
+  const n = Math.max(JD.journeyEnd, J.exp), cells = [];
+  for (let i = 0; i < n; i++) { const c = J.map[i]; cells.push(`<i${c ? ` style="background:${CAT[c][1]}"` : ''}${c ? ` title="${i + 1}걸음 · ${CAT[c][0]}"` : ''}></i>`); }
+  const cnt = {}; J.map.forEach(c => { if (c) cnt[c] = (cnt[c] || 0) + 1; });
+  const legend = Object.keys(CAT).filter(k => cnt[k]).map(k => `<span><i style="background:${CAT[k][1]}"></i>${CAT[k][0]} ${cnt[k]}</span>`).join('');
+  return `<div class="jmap"><div class="jmap-h">여정 지도 <small>한 칸 = 한 걸음 · 갈림길에서 고른 횟수 ${J.choices}번</small></div><div class="jmap-grid">${cells.join('')}</div><div class="jmap-legend">${legend}</div></div>`;
+}
 function showLog(final = false){
   if (!J || J.busy) return;
   $('journey').hidden = true; hideChoice();
@@ -590,6 +713,7 @@ function showLog(final = false){
     <h2 class="sum-title">${esc(J.form)}</h2>
     <p class="cap-line">${esc(J.label)} · ${capacity(J.form, J.stage)}</p>
     <p class="desc">${esc(J.dg.ko)}${wa(J.dg.ko)} 함께 ${J.moves}번 이동하고 ${J.exp}걸음을 걸으며 ${J.visited.size}개 구역을 여행했어요. 가장 강한 성향은 <b class="spt">${JD.traits[topT]}</b>${bat(JD.traits[topT]) > 0 ? '이에요' : '예요'}.${best && best[1] > 0 ? ` 가장 친한 친구는 <b class="spt">${esc(best[0])}</b>(${bondTier(best[1])} · 친밀도 ${best[1]})${bat(best[0]) > 0 ? '이에요' : '예요'}.` : ''}${sp ? ` 숨겨진 구역을 찾아 <b class="spt">${sp}</b>${ro(sp)} 특별 진화했어요!` : ''}</p>
+    ${journeyMap()}
     <ol class="timeline">${J.route.map(r => `<li class="${r.special ? 'sp' : ''}"><span class="st">${esc(r.label)}<br>${esc(r.cap)}</span><b>${picTag(r.form, 'tl-pic')}${esc(r.form)}</b><small>${esc(r.path)}${r.regions.length ? ' · ' + esc(r.regions.join(' → ')) : ''}</small></li>`).join('')}</ol>
     <div class="actions">
       <button class="ghost primary" id="jCont" type="button">계속 여행하기</button>
@@ -612,8 +736,17 @@ netc.addEventListener('pointermove', e => { if (J && !J.busy && card.hidden && !
 netc.addEventListener('pointerleave', () => { NET.hover = -1; });
 netc.addEventListener('click', e => { if (J && !J.busy && !NET.pinching) travel(NET.regionAt(e.clientX, e.clientY)); });
 // 개발용: 주소 끝에 #debug를 붙이면 콘솔에서 __digi.travel(구역번호)로 이동을, __digi.evolve({name, stage, label, partner}, 'JOGRESS EVOLUTION')로 진화 연출을 시험할 수 있어요
-if (location.hash === '#debug') window.__digi = { bond: (n, v) => { J.bonds[n] = v; renderJourney(); }, travel, evolve: playEvolution, candidates: k => evoCandidates(k ?? J.stage), render: () => renderJourney(), net: NET, get journey(){ return J; } };
+if (location.hash === '#debug') window.__digi = { map: journeyMap, bond: (n, v) => { J.bonds[n] = v; renderJourney(); }, travel, evolve: playEvolution, candidates: k => evoCandidates(k ?? J.stage), render: () => renderJourney(), net: NET, get journey(){ return J; } };
 $('jEnd').addEventListener('click', () => showLog());
+$('jFocus').addEventListener('click', e => {
+  const b = e.target.closest('[data-f]'); if (!b || !J || b.dataset.f === J.focus) return;
+  J.focus = b.dataset.f; try { localStorage.setItem('digi-focus', J.focus); } catch (er) {}
+  log(`훈련 방침을 「${JD.focus[J.focus].name}」${ro(JD.focus[J.focus].name)} 바꿨어요. ${JD.focus[J.focus].desc}`, 'sys');
+});
+function autoOn(){ return $('jAuto').getAttribute('aria-pressed') === 'true'; }
+function setAuto(on){ $('jAuto').setAttribute('aria-pressed', on ? 'true' : 'false'); $('jAuto').classList.toggle('on', on); try { localStorage.setItem('digi-auto', on ? '1' : '0'); } catch (er) {} }
+$('jAuto').addEventListener('click', () => setAuto(!autoOn()));
+try { setAuto(localStorage.getItem('digi-auto') === '1'); } catch (er) { setAuto(false); }
 $('jHome').addEventListener('click', closeNet);
 document.querySelectorAll('#rot [data-rot]').forEach(b => {
   const [dr, dp] = b.dataset.rot.split(',').map(Number); let t = 0;

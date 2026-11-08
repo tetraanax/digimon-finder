@@ -416,3 +416,51 @@ h1{background:linear-gradient(90deg,#a5f3fc,#c4b5fd 45%,#f9a8d4);-webkit-backgro
 .toast.bond{border-left-color:#f472b6;box-shadow:0 0 40px rgba(244,114,182,.22)}.toast.bond .tag{color:#f9a8d4}
 .j-log li.bond{color:#f9a8d4}
 @media (min-width:641px){ .j-bonds{font-size:14px} .b-top b{font-size:17px} .b-top small{font-size:12.5px} .b-tag{font-size:12px} .b-pic,.b-list .jp-sil{width:36px;height:36px} .b-list em{font-size:14px} }
+
+/* ---------- 컨디션 · 세계 사건 ---------- */
+.j-status{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12px}
+.j-status .cond{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:8px;flex:1;min-width:150px;color:var(--muted)}
+.j-status .cond .bar{height:6px;border-radius:9px;background:rgba(255,255,255,.08);overflow:hidden}
+.j-status .cond .bar i{display:block;height:100%;border-radius:9px;background:linear-gradient(90deg,#34d399,#4ade80);transition:width .5s}
+.j-status .cond.mid .bar i{background:linear-gradient(90deg,#f59e0b,#facc15)}
+.j-status .cond.low .bar i{background:linear-gradient(90deg,#e11d48,#f43f5e)}
+.j-status .cond.low{color:#fda4af}
+.j-status .cond b{font-family:var(--f-code);font-weight:400;color:var(--ink)}
+.j-status .world{padding:2px 10px;border-radius:99px;background:rgba(129,140,248,.18);color:#c7d2fe;border:1px solid rgba(129,140,248,.45);white-space:nowrap}
+/* ---------- 훈련 방침 ---------- */
+.j-focus{display:flex;flex-direction:column;gap:5px}
+.f-h{font-size:12px;color:var(--accent)}
+.f-list{display:flex;flex-wrap:wrap;gap:5px}
+.f-b{font:inherit;font-size:12px;color:var(--muted);background:var(--bg);border:1px solid rgba(255,255,255,.12);border-radius:99px;padding:3px 10px;cursor:pointer;display:inline-flex;gap:4px;align-items:center}
+.f-b i{font-style:normal;opacity:.8}
+.f-b:hover{color:var(--ink);border-color:rgba(255,255,255,.3)}
+.f-b.on{color:#0b0f1f;background:var(--accent);border-color:var(--accent)}
+.f-b:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.f-desc{margin:0;font-size:11.5px;color:var(--muted)}
+@media (min-width:641px){ .j-status,.f-b{font-size:13.5px} .f-h{font-size:15px} .f-desc{font-size:13px} }
+/* ---------- 자동 선택 ---------- */
+#jAuto.on{color:#0b0f1f;background:var(--accent);border-color:var(--accent)}
+.c-auto{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted);margin:-2px 0 8px}
+.c-auto i{flex:1;height:3px;border-radius:3px;background:var(--accent);transform-origin:left;animation:cauto linear forwards}
+@keyframes cauto{from{transform:scaleX(1)}to{transform:scaleX(0)}}
+.c-opt.pre{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+/* ---------- 사건 종류별 칩 · 알림 · 기록 ---------- */
+.t-cond{--tc:#6ee7b7}.t-cond.neg{--tc:#fda4af}
+.c-opt em i.t-cond{background:#6ee7b7}.c-opt em i.t-cond.neg{background:#fda4af}
+.toast.danger{border-left-color:#f43f5e}.toast.danger .tag{color:#fda4af}
+.toast.luck{border-left-color:#4ade80}.toast.luck .tag{color:#86efac}
+.toast.rare{border-left-color:#fde047;box-shadow:0 0 44px rgba(253,224,71,.3)}.toast.rare .tag{color:#fde047}
+.toast.world{border-left-color:#818cf8;box-shadow:0 0 40px rgba(129,140,248,.25)}.toast.world .tag{color:#c7d2fe}
+.toast.chain{border-left-color:#fb923c}.toast.chain .tag{color:#fdba74}
+.toast.rest{border-left-color:#94a3b8}.toast.rest .tag{color:#cbd5e1}
+.toast.local{border-left-color:#7dd3fc}.toast.local .tag{color:#7dd3fc}
+.j-log li.danger{color:#fda4af}.j-log li.luck{color:#86efac}.j-log li.rare{color:#fde047}.j-log li.world{color:#c7d2fe}.j-log li.chain{color:#fdba74}
+/* ---------- 여정 지도 ---------- */
+.jmap{margin:14px 0 6px;text-align:left}
+.jmap-h{font-size:13px;color:var(--accent);margin-bottom:6px}
+.jmap-h small{color:var(--muted);font-size:11.5px;margin-left:6px}
+.jmap-grid{display:grid;grid-template-columns:repeat(20,1fr);gap:3px}
+.jmap-grid i{aspect-ratio:1;border-radius:3px;background:rgba(255,255,255,.06)}
+.jmap-legend{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:8px;font-size:11.5px;color:var(--muted)}
+.jmap-legend span{display:inline-flex;align-items:center;gap:5px}
+.jmap-legend i{width:10px;height:10px;border-radius:3px;display:inline-block}
