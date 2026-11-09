@@ -1,17 +1,22 @@
-/* 디지몬 이름 → 이미지 파일 연결
-   데이터의 이름은 공식 한국어판 이름으로 써요.
-   1) img/디지몬_국문 에 이름과 똑같은 파일 (예: 아구몬 → 아구몬.jpg)
-   2) img/디지몬_추가 의 영어 이름 파일 (아래 EXTRA 표)
-   3) 'X항체' 형태 (예: 워그레이몬X → 워그레이몬(X항체).jpg)
-   4) 기본 형태 그림이 없으면 X항체 그림으로, X항체 그림이 없으면 기본 형태로 대신
+/* 디지몬 이름 → 이미지 파일 · 도감 정보 연결
+   1) js/digimon-db.js (digimon.json 에서 만든 표, 그림은 img/digimon) — 공식 한국어 이름으로 찾아요
+      앱 데이터의 이름이 조금 다르면 맞춰서 찾아요:
+        '벨페몬 - 슬립 모드' → '벨페몬: 슬립 모드', 'OOX' → 'OO(X항체)', 아래 ALIAS 표
+   2) 예전 그림 폴더 (img/디지몬_국문 의 같은 이름 파일, img/디지몬_추가 의 EXTRA 표)
    찾지 못하면 null → 화면에는 속성 색 디지알 그림이 나와요. */
 (function () {
   'use strict';
+  const DB = window.DIGI_DB || {}, DB_DIR = window.DIGI_DB_DIR || 'img/digimon/';
   const DIR = window.DIGI_IMG_DIR || 'img/디지몬_국문/';
   const EXTRA_DIR = 'img/디지몬_추가/';
   const files = new Map((window.DIGI_IMG_FILES || []).map(f => [f.replace(/\.[^.]+$/, ''), f]));
 
-  // 국문 폴더에 없는 디지몬: 한국어 이름 → img/디지몬_추가 파일
+  // 앱 데이터 이름 → digimon.json 의 공식 이름 (모양이 여럿이면 대표 모습)
+  const ALIAS = {
+    '누메몬': '워매몬', '드리모게몬': '두리몬', '나노몬': '데이터몬', '켄타루몬': '켄터스몬',
+    '메탈그레이몬': '메탈그레이몬(백신종)', '아트라캅테리몬': '아트라캅테리몬(레드)', '코어드라몬': '코어드라몬(녹)',
+  };
+  // 국문 폴더에 없는 디지몬: 한국어 이름 → img/디지몬_추가 파일 (예전 연결, 도감 표에 없을 때만 써요)
   const EXTRA = {
     '피요몬': 'piyomon.jpg', '텐타몬': 'tentomon.jpg', '파닥몬': 'patamon.jpg', '브이몬': 'v-mon.jpg',
     '호크몬': 'hawkmon.jpg', '베타몬': 'betamon.jpg', '울퉁몬': 'gottsumon.jpg', '고부리몬': 'goburimon.jpg',
@@ -29,17 +34,37 @@
     '화염드라몬': 'fladramon.jpg', '번개드라몬': 'lighdramon.jpg', '호루스몬': 'holsmon.jpg',
   };
 
-  function fileFor(name) {
+  // 도감 표에서 쓸 이름 후보
+  function keys(n) {
+    const out = [n, ALIAS[n], n.replace(/ - /g, ': ')];
+    if (/X$/.test(n)) { const b = n.slice(0, -1); out.push(b + '(X항체)', (ALIAS[b] || b) + '(X항체)', b.replace(/ - /g, ': ') + '(X항체)'); }
+    return out.filter(Boolean);
+  }
+  function entry(name) {
     if (!name) return null;
     const n = String(name).trim();
+    for (const k of keys(n)) if (DB[k]) return { name: k, row: DB[k] };
+    return null;
+  }
+  function fileFor(name) {
+    if (!name) return null;
+    const n = String(name).trim(), e = entry(n);
+    if (e && e.row[0]) return DB_DIR + e.row[0];
     if (files.has(n)) return DIR + files.get(n);
     if (EXTRA[n]) return EXTRA_DIR + EXTRA[n];
     const base = /X$/.test(n) ? n.slice(0, -1) : null;
     const cands = base ? [base + '(X항체)', base] : [n + '(X항체)'];
     for (const c of cands) if (files.has(c)) return DIR + files.get(c);
-    if (base && EXTRA[base]) return EXTRA_DIR + EXTRA[base];
+    if (base) { const be = entry(base); if (be && be.row[0]) return DB_DIR + be.row[0]; if (EXTRA[base]) return EXTRA_DIR + EXTRA[base]; }
     return null;
   }
+  // 도감 정보: { name(공식 이름), level, type, attribute, attacks[], related[] } 또는 null
+  function dataFor(name) {
+    const e = entry(name); if (!e) return null;
+    const [, level, type, attribute, attacks, related] = e.row;
+    return { name: e.name, level, type, attribute, attacks, related };
+  }
   window.digiImage = fileFor;
+  window.digiData = dataFor;
   window.DIGI_IMG_EXTRA = EXTRA;
 })();

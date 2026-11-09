@@ -374,7 +374,10 @@ const sleep = (ms, me) => new Promise(res => setTimeout(() => res(J === me), ms 
 
 /* ---------- evolution ---------- */
 // 속성: 어둠이 가장 높거나 전체의 30% 이상이면 바이러스종. 아니면 용기+우정이 앞서면 백신종, 지혜+힘이 앞서면 데이터종을 먼저 골라요
-const attrOf = name => (window.DIGI_ATTR || {})[name] || ((window.DIGI.find(d => d.ko === name) || {}).attr) || 'fre';
+// 속성: 직접 정한 표(js/digi-info.js) → 성장기 파트너 데이터 → 도감 정보(js/digimon-db.js) → 프리
+const DB_ATTR = { '백신': 'vac', '데이터': 'dat', '바이러스': 'vir', '프리': 'fre', '배리어블': 'fre', '불명': 'fre', 'NO DATA': 'fre' };
+const attrOf = name => (window.DIGI_ATTR || {})[name] || ((window.DIGI.find(d => d.ko === name) || {}).attr)
+  || DB_ATTR[((window.digiData && window.digiData(name)) || {}).attribute] || 'fre';
 function wantAttr(){
   const t = J.traits, sum = statSum(), top = [...TRAITS].sort((a, b) => t[b] - t[a])[0];
   if (t.dark > 0 && (top === 'dark' || t.dark >= sum * .3)) return 'vir';
@@ -615,13 +618,18 @@ const infoEl = $('jInfo');
 function openInfo(i){
   if (!J) return;
   const r = J.route[i] || J.route[J.route.length - 1], name = r.form, rook = window.DIGI.find(x => x.ko === name);
-  const pic = picOf(name), now = i === J.route.length - 1;
+  const pic = picOf(name), now = i === J.route.length - 1, dd = window.digiData && window.digiData(name);
   const chips = [
     `<span class="chip ${r.special ? 'sp' : ''}">${esc(r.label)}</span>`,
     `<span class="chip cap">${esc(r.cap)}</span>`,
     `<span class="chip attr ${ATTR[attrOf(name)][1]}">${ATTR[attrOf(name)][0]}</span>`,
-    rook ? `<span class="chip">${esc(rook.type)}</span>` : '',
+    (dd && dd.type && dd.type !== '-') || rook ? `<span class="chip">${esc(dd && dd.type && dd.type !== '-' ? dd.type : rook.type)}</span>` : '',
   ].join('');
+  const rows = dd ? [
+    dd.level && dd.level !== r.label ? ['도감 등급', dd.level] : null,
+    dd.attacks && dd.attacks.length ? ['필살기', dd.attacks.join(' · ')] : null,
+    dd.related && dd.related.length ? ['관련된 디지몬', dd.related.slice(0, 8).join(' · ')] : null,
+  ].filter(Boolean).map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('') : '';
   infoEl.innerHTML = `
     <button class="ji-x" type="button" aria-label="닫기">×</button>
     ${pic ? `<div class="ji-pic"><img src="${esc(pic)}" alt="${esc(name)}"></div>` : ''}
@@ -633,6 +641,7 @@ function openInfo(i){
       <dl>
         <dt>진화 경로</dt><dd>${esc(r.path || '—')}</dd>
         <dt>다녀간 구역</dt><dd>${r.regions.length ? esc(r.regions.join(' · ')) : (now ? '아직 없어요' : '—')}</dd>
+        ${rows}
       </dl>
     </div>`;
   infoEl.hidden = false; infoEl.dataset.i = i;
