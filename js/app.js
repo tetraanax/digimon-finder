@@ -454,7 +454,11 @@ function checkUnlocks(){
   }
 }
 function specialEvolution(d){
-  if (J.special || !d) return null;
+  if (!d) return null;
+  // 타락 (어비스의 fall 표): 천사가 어둠에 물들어 다시 한 번 진화해요
+  const fallen = d.fall && d.fall[J.form];
+  if (fallen) return { name: fallen, stage: 4, special: '타천사', path: '심연으로 타락', sub: 'FALL DOWN' };
+  if (J.special) return null;
   const en = J.dg.en, ult = J.stage >= 3 ? J.form : ([...J.dg.line].reverse().find(n => n && n !== '?') || J.form);
   let name = d.forms && d.forms[en];
   if (!name && d.pool) name = d.pool.includes(J.form) ? J.form : d.pool.includes(ult) ? ult : null;

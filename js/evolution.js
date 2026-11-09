@@ -49,7 +49,7 @@
   function pickTheme(kind, attr, label) {
     if (kind === 'CAPSULE EVOLUTION') return 'capsule';
     if (kind === 'JOGRESS EVOLUTION') return 'jogress';
-    if (/마왕/.test(label)) return 'virus';
+    if (/마왕|타천사/.test(label)) return 'virus';
     if (/로열나이츠|사성수|올림포스/.test(label)) return 'holy';
     return { vac: 'holy', vir: 'virus', fre: 'free' }[attr] || 'data';
   }

@@ -31,6 +31,8 @@ window.JOURNEY = {
       pool: ['듀나스몬', '크레니엄몬', '로드나이트몬', '엑자몬', '제스몬', '알포스브이드라몬'] },
     { region: '어비스', special: '칠대마왕', sub: 'SEVEN GREAT DEMON LORDS', path: '심연의 부름',
       rule: { trait: { dark: 380 } },
+      // 타락: 이 모습으로 들어오면 칠대마왕 대신 타락한 모습이 돼요 (이미 다른 특별 진화를 했어도 일어나요)
+      fall: { '오파니몬': '오파니몬 - 폴다운 모드', '오파니몬X': '오파니몬 - 폴다운 모드X' },
       pool: ['루체몬 - 폴다운 모드', '마왕몬', '리리스몬', '베르제브몬', '발바몬', '리바이어몬', '벨페몬 - 슬립 모드', '벨페몬 - 레이지 모드'] },
     { region: '사성수 결계', special: '사성수', sub: 'FOUR HOLY BEASTS', path: '사방의 수호',
       rule: { trait: { courage: 180, friend: 180, wisdom: 180, power: 180 } },
