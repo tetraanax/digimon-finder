@@ -472,6 +472,41 @@
     const randDir = () => { const th = r() * 6.283, ph = Math.acos(2 * r() - 1); return [Math.sin(ph) * Math.cos(th), Math.cos(ph), Math.sin(ph) * Math.sin(th)]; };
 
     const hubs = [], clusters = [];
+    /* 장식: 구조 선마다 반짝이는 구슬, 구역을 감싸는 반짝이 실.
+       숨겨진 구역(lux > 1)은 구슬과 실이 몇 배로 촘촘하고, 기울어진 빛 고리와 반짝이 껍질이 둘러싸요 */
+    const LUX = 4.5;
+    const adorn = (c, cx, cy, cz, R, col, e0, ids, lux) => {
+      for (let e = e0, e1 = E.length; e < e1; e += 2) {
+        const a = E[e], b = E[e + 1], L = Math.sqrt(d2(a, b)); if (L < R * .04 / lux) continue;
+        const m = Math.min(lux > 1 ? 14 : 5, Math.round((1 + L / (R * .12)) * (lux > 1 ? lux * .8 : 1))); let p = a;
+        for (let q = 1; q <= m; q++) { const t = q / (m + 1);
+          const cc = lux > 1 && r() < .25 ? Math.floor(r() * PALETTE.length) : (r() < .8 ? C[a] : C[b]);
+          const id = add(lerp(X[a], X[b], t), lerp(Y[a], Y[b], t), lerp(Z[a], Z[b], t), cc, BEAD, (.5 + r() * .45) * (lux > 1 ? 1.25 : 1), c);
+          if (q === 1) E[e + 1] = id; else link(p, id); p = id; }
+        link(p, b);
+      }
+      for (let k = 0, nk = Math.round((24 + (r() * 16 | 0)) * lux); k < nk && ids.length; k++) {
+        let p = ids[r() * ids.length | 0]; const d = randDir(), len = R * (.08 + r() * .1), sw2 = r() * 6.283;
+        for (let q = 1, nq = 3 + (r() * 4 | 0); q <= nq; q++) {
+          const w = Math.sin(q * .9 + sw2) * len * .5, id = add(X[p] + d[0] * len + w * d[2], Y[p] + d[1] * len, Z[p] + d[2] * len - w * d[0], lux > 1 && r() < .3 ? Math.floor(r() * PALETTE.length) : col, BEAD, .45 + r() * .4, c);
+          link(p, id); p = id; }
+      }
+      if (lux <= 1) return;
+      // 기울어진 빛 고리 3~4개 (구슬 사슬)
+      for (let k = 0, nr = 3 + (r() * 2 | 0); k < nr; k++) {
+        const rad = R * (1.15 + k * .28 + r() * .1), n = 90 + k * 20, ta = (r() - .5) * 1.4, tb = r() * 6.283, ph = r() * 6.283;
+        const ct = Math.cos(ta), st = Math.sin(ta), cb = Math.cos(tb), sb = Math.sin(tb), ring = [];
+        const rc = k % 2 ? col : Math.floor(r() * PALETTE.length);
+        for (let i = 0; i < n; i++) { const a = ph + i / n * 6.283, x0 = Math.cos(a) * rad, z0 = Math.sin(a) * rad, y1 = z0 * st, z1 = z0 * ct;
+          ring.push(add(cx + x0 * cb - z1 * sb, cy + y1, cz + x0 * sb + z1 * cb, i % 15 === 0 ? (k % 2 ? rc : col) : rc, i % 15 === 0 ? DIAMOND : BEAD, i % 15 === 0 ? 1.6 : .7 + r() * .4, c)); }
+        for (let i = 0; i < n; i++) link(ring[i], ring[(i + 1) % n]);
+        // 고리의 마름모 점에서 구조 쪽으로 가는 빛살
+        for (let i = 0; i < n; i += 15) { let best = ids[0], bd = Infinity; for (let q = 0; q < 12; q++) { const j = ids[r() * ids.length | 0], dd = d2(ring[i], j); if (dd < bd) { bd = dd; best = j; } } if (best !== undefined) link(ring[i], best); }
+      }
+      // 반짝이 껍질: 이어지지 않은 채 구역을 감싸고 깜빡이는 점들
+      for (let i = 0, n = 420; i < n; i++) { const d = randDir(), rad = R * (1.1 + r() * 1.1);
+        add(cx + d[0] * rad, cy + d[1] * rad, cz + d[2] * rad, r() < .5 ? col : Math.floor(r() * PALETTE.length), BEAD, .5 + r() * .7, c); }
+    };
     const makeCluster = (cx, cy, cz, region, fixed) => {
       const c = clusters.length;
       curRegion = region;
@@ -496,22 +531,7 @@
         for (let i = 0; i < 4; i++) { link(c[i], c[(i + 1) % 4]); link(c[4 + i], c[4 + (i + 1) % 4]); link(c[i], c[4 + i]); } return c; };
       const e0 = E.length;
       SIG[shape]({ at, put, link, chain, pts, fib, closest, near, box, hub, R, r, J: () => (r() - .5) * 2 });
-      // 화려하게: 구조 선마다 반짝이는 구슬을 꿰어 넣어요 (긴 선일수록 여러 개)
-      for (let e = e0, e1 = E.length; e < e1; e += 2) {
-        const a = E[e], b = E[e + 1], L = Math.sqrt(d2(a, b)); if (L < R * .04) continue;
-        const m = Math.min(5, 1 + (L / (R * .12) | 0)); let p = a;
-        for (let q = 1; q <= m; q++) { const t = q / (m + 1);
-          const id = add(lerp(X[a], X[b], t), lerp(Y[a], Y[b], t), lerp(Z[a], Z[b], t), r() < .8 ? C[a] : C[b], BEAD, .5 + r() * .45, c);
-          if (q === 1) E[e + 1] = id; else link(p, id); p = id; }
-        link(p, b);
-      }
-      // 구역을 감싸는 반짝이 장막: 구조 점 몇 개에서 바깥으로 흩날리는 가는 실
-      for (let k = 0, nk = 24 + (r() * 16 | 0); k < nk && ids.length; k++) {
-        let p = ids[r() * ids.length | 0]; const d = randDir(), len = R * (.08 + r() * .1), sw2 = r() * 6.283;
-        for (let q = 1, nq = 3 + (r() * 4 | 0); q <= nq; q++) {
-          const w = Math.sin(q * .9 + sw2) * len * .5, id = add(X[p] + d[0] * len + w * d[2], Y[p] + d[1] * len, Z[p] + d[2] * len - w * d[0], col, BEAD, .45 + r() * .4, c);
-          link(p, id); p = id; }
-      }
+      adorn(c, cx, cy, cz, R, col, e0, ids, isSecret(region) ? LUX : 1);
       // make sure every node in the cluster reaches the hub (nearest-attachment)
       const attached = [hub];
       for (const id of ids) {
@@ -593,8 +613,10 @@
     const secret = (region, cx, cy, cz, build) => {
       curRegion = region;
       const c = clusters.length, col = REGION_COLOR[region];
-      const hub = add(cx, cy, cz, col, HUB, 5, c);
+      const hub = add(cx, cy, cz, col, HUB, 5, c), e0 = E.length;
       build(hub, c, col);
+      { const ids = []; let far = 0; for (let i = hub + 1; i < X.length; i++) { ids.push(i); far = Math.max(far, Math.sqrt(d2(hub, i))); }
+        adorn(c, cx, cy, cz, Math.max(500, far * .85), col, e0, ids, LUX); }
       let best = hubs[0], bd = Infinity;
       for (const h of hubs) { const dd = d2(hub, h); if (dd < bd) { bd = dd; best = h; } }
       let prev = hub; const steps = Math.min(22, 6 + Math.round(Math.sqrt(bd) / 700));
@@ -664,6 +686,7 @@
       this.unlocked = new Set();
       this.mode = 'idle'; this.visited = new Map(); this.pathEdges = new Set(); this.labels = []; this.trail = [];
       this.edgeCount = this.G.E.length / 2;
+      this.lux = Uint8Array.from(this.G.RG, g => g >= 0 && isSecret(g) ? 1 : 0);   // 숨겨진 구역의 점: 더 밝고 크게, 가까우면 빛나요
       this.nodeCount = n;
       this.makeSprites(); this.makePulses(900);
       this.frame = this.frame.bind(this); this.resize = this.resize.bind(this);
@@ -991,6 +1014,7 @@
         if (PZ[a] > 30 && PZ[b] > 30) { x0 = PX[a]; y0 = PY[a]; x1 = PX[b]; y1 = PY[b]; }
         else { const q = seg(a, b); if (!q) continue; [x0, y0, x1, y1] = q; }
         if ((x0 < 0 && x1 < 0) || (x0 > W && x1 > W) || (y0 < 0 && y1 < 0) || (y0 > H && y1 > H)) continue;
+        if (Math.abs(x1 - x0) + Math.abs(y1 - y0) < 1.2 * dpr) continue;   // 점 하나 크기보다 짧은 선은 점이 대신 보여 줘요
         const zz = Math.max(30, (PZ[a] + PZ[b]) * .5), lv = zz < 1200 * DK ? 2 : zz < 2800 * DK ? 1 : 0, key = G.C[a] * 3 + lv;
         const p = buckets[key] || (buckets[key] = new Path2D()); p.moveTo(x0, y0); p.lineTo(x1, y1);
       }
@@ -1045,9 +1069,13 @@
         const depthA = Math.max(.5, Math.min(1, 1800 * DK / PZ[i]));
         const vis = this.visited.has(i);
         if (kind === DUST) { dot(G.C[i], .55 * depthA, x, y, Math.max(1, G.S[i] * s * 1.6)); continue; }
-        if (kind === BEAD && !vis) { const d = Math.max(1.2 * dpr, G.S[i] * s * 2.2); dot(G.C[i], depthA * (.55 + .45 * Math.sin(now * .004 + i * 1.7)), x - d * .5, y - d * .5, d); continue; }
+        const lx = this.lux[i];
+        if (kind === BEAD && !vis) { const tw = .55 + .45 * Math.sin(now * (lx ? .006 : .004) + i * 1.7), d = Math.max((lx ? 1.6 : 1.2) * dpr, G.S[i] * s * (lx ? 2.8 : 2.2));
+          dot(G.C[i], Math.min(1, depthA * tw * (lx ? 1.5 : 1)), x - d * .5, y - d * .5, d);
+          if (lx && tw > .93 && PZ[i] < 5000) { const gs = d * 3.2; g.globalAlpha = .55 * depthA; g.drawImage(this.glow[G.C[i]], x - gs, y - gs, gs * 2, gs * 2); }
+          continue; }
         const sz = Math.max(1.8 * dpr, G.S[i] * s * 2.6);
-        if (!vis && kind !== HUB && sz < 3.2 * dpr) { const d = kind === RELAY ? sz * .7 : sz; dot(G.C[i], kind === RELAY ? depthA * .8 : depthA, x - d * .5, y - d * .5, d); continue; }
+        if (!vis && kind !== HUB && sz < 3.2 * dpr && !(lx && PZ[i] < 9000)) { const d = kind === RELAY ? sz * .7 : sz; dot(G.C[i], kind === RELAY ? depthA * .8 : depthA, x - d * .5, y - d * .5, d); continue; }
         if (kind === HUB) {
           const gs = sz * 6; g.globalAlpha = .8 * depthA; g.drawImage(this.glow[G.C[i]], x - gs, y - gs, gs * 2, gs * 2);
           g.globalAlpha = depthA; g.strokeStyle = col; g.lineWidth = Math.max(1, sz * .25);
@@ -1055,7 +1083,8 @@
           g.fillStyle = '#ffffff'; g.beginPath(); g.arc(x, y, sz * .7, 0, 6.283); g.fill();
           continue;
         }
-        if ((kind === DIAMOND || kind === RING || kind === CROSS) && PZ[i] < 3200) { // 반짝이는 장식 점
+        if (lx && kind !== RELAY && PZ[i] < 9000) { const gs = sz * (3 + 1.5 * Math.sin(now * .004 + i)); g.globalAlpha = .5 * depthA; g.drawImage(this.glow[G.C[i]], x - gs, y - gs, gs * 2, gs * 2); }
+        else if ((kind === DIAMOND || kind === RING || kind === CROSS) && PZ[i] < 3200) { // 반짝이는 장식 점
           const gs = sz * (2.4 + 1.2 * Math.sin(now * .003 + i)); g.globalAlpha = .45 * depthA; g.drawImage(this.glow[G.C[i]], x - gs, y - gs, gs * 2, gs * 2); }
         g.globalAlpha = vis ? 1 : depthA; g.fillStyle = vis ? '#ffffff' : col; g.strokeStyle = vis ? '#ffffff' : col;
         switch (kind) {

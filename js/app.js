@@ -162,11 +162,38 @@ function capacity(name, stage){
   const v = lo + (hash(name + '#' + stage) % 1000) / 1000 * (hi - lo);
   return (v >= 10 ? Math.round(v) : v.toFixed(1)) + unit;
 }
+// 진화 후 용량: 이름으로 정한 값이 지금보다 작으면(같은 단계에서 한 번 더 진화할 때) 지금 용량의 1.3~2배로 키워요
+const capMB = c => { const m = /([\d.]+)(MB|GB|TB)/.exec(c || ''); return m ? +m[1] * { MB: 1, GB: 1024, TB: 1048576 }[m[2]] : 0; };
+function evoCapacity(evo){
+  const base = capacity(evo.name, evo.stage), prev = J && J.route.length ? capMB(J.route[J.route.length - 1].cap) : 0;
+  if (capMB(base) > prev) return base;
+  const tb = prev * (1.3 + (hash(evo.name) % 70) / 100) / 1048576;
+  return (tb >= 10 ? Math.round(tb) : tb.toFixed(1)) + 'TB';
+}
 const pickFrom = (arr, r = Math.random) => arr[Math.floor(r() * arr.length)];
 const randInt = ([lo, hi]) => lo + Math.floor(Math.random() * (hi - lo + 1));
 const byName = (map, name) => { for (const k in map) if (name.includes(k)) return map[k]; return null; };
 const fill = (t, net, mon) => t.replace('{net}', net).replace('{mon}', mon).replace('{을}', eul(mon)).replace('{과}', wa(mon)).replace('{이}', ga(mon));
 const wildOf = net => (byName(JD.wildBy, net) || JD.wild).filter(m => m !== J.form && m !== J.dg.ko);
+// 디지몬의 단계: 도감 등급으로 (유년기 -1 · 성장기 0 · 성숙기/아머체 1 · 완전체/하이브리드체 2 · 궁극체 3)
+const LEVEL_STAGE = [[/유년기|유아기/, -1], [/성장기/, 0], [/성숙기|아머체/, 1], [/완전체|하이브리드체/, 2], [/궁극체/, 3]];
+const stageOfMon = name => { const lv = ((window.digiData && window.digiData(name)) || {}).level || ''; const m = LEVEL_STAGE.find(([re]) => re.test(lv)); return m ? m[1] : null; };
+let stageBuckets = null;   // 도감 전체를 단계별로 (그 구역에 알맞은 상대가 없을 때 빌려 와요)
+const bucketOf = st => {
+  if (!stageBuckets) { stageBuckets = {}; for (const [n, row] of Object.entries(window.DIGI_DB || {})) { const m = LEVEL_STAGE.find(([re]) => re.test(row[1])); if (m && row[0] && !/크로스워즈/.test(row[1]) && !/[:(+]/.test(n)) (stageBuckets[m[1]] = stageBuckets[m[1]] || []).push(n); } }
+  return stageBuckets[st] || [];
+};
+// 사건에 나오는 상대: 'strong'이면 파트너와 같거나 높은 단계, 'weak'이면 낮은 단계에서 골라요
+function monFor(ev, mons){
+  const foe = ev && ev.foe; if (!foe) return pickFrom(mons);
+  const p = Math.min(3, J.stage), st = m => stageOfMon(m);
+  if (foe === 'strong') {
+    const ok = mons.filter(m => st(m) !== null && st(m) >= p);
+    return ok.length ? pickFrom(ok) : pickFrom(bucketOf(p).filter(n => n !== J.form)) || pickFrom(mons);
+  }
+  const low = mons.filter(m => st(m) !== null && st(m) < J.stage);
+  return low.length ? pickFrom(low) : pickFrom(mons.filter(m => st(m) !== null && st(m) <= J.stage)) || pickFrom(mons);
+}
 const fxChips = fx => fx ? Object.entries(fx).map(([k, v]) => `<i class="t-${k}">${JD.traits[k]} +${v}</i>`).join('') : '';
 const stageLabel = st => JD.stageNames[Math.min(st, 3)];
 const picOf = name => window.digiImage(name);
@@ -282,7 +309,7 @@ async function stepEvent(region){
     mark('world'); log(`🌐 세계 사건 · ${w.name} — ${w.start}`, 'world', fx); return;
   }
   // 3) 희귀
-  if (r() < rate('rare')) return simpleEvent(pickFrom(JD.rares), 'rare', net, pickFrom(mons));
+  if (r() < rate('rare')) { const ev = pickFrom(JD.rares); return simpleEvent(ev, 'rare', net, monFor(ev, mons)); }
   // 4) 조그레스 짝이 찾아와요
   if (jg && bondOf(jg.b) < JD.bond.jogress && r() < rate('partner')) {
     const fx = gainC({ friend: 1 }, JD.statGain.roam); addTraits(fx);
@@ -300,7 +327,7 @@ async function stepEvent(region){
   }
   // 6) 위기 (어두운 구역에서 더 자주)
   if (r() < rate('danger') * (isDarkNet(net) ? 1.5 : 1)) {
-    const d = pickFrom(JD.dangers), mon = pickFrom(mons);
+    const d = pickFrom(JD.dangers), mon = monFor(d, mons);
     if (d.fork) return forkEvent(d, 'danger', region, mon);
     return simpleEvent(d, 'danger', net, mon);
   }
@@ -314,7 +341,7 @@ async function stepEvent(region){
     mark('bond'); log(fill(pickFrom(JD.bondVisits), net, n), 'bond', fx, n, bd); bondUp(bd); return;
   }
   // 8) 행운
-  if (r() < rate('luck')) return simpleEvent(pickFrom(JD.lucks), 'luck', net, pickFrom(mons));
+  if (r() < rate('luck')) { const ev = pickFrom(JD.lucks); return simpleEvent(ev, 'luck', net, monFor(ev, mons)); }
   // 9) 지쳤을 때는 쉬어 가요
   if (J.cond < JD.cond.low && r() < .45) { const c = addCond(12); mark('rest'); log(pickFrom(JD.rests), 'rest', null, null, null, c); return; }
   // 10) 구역 고유 사건 · 11) 평범한 하루 — 최근 기록과 같은 문장은 다시 쓰지 않아요
@@ -322,7 +349,7 @@ async function stepEvent(region){
   const local = (byName(JD.events, net) || []).filter(x => !recentText.has(x) && !recentText.has(`${net}에 도착했어요. ${x}`));
   if (local.length && r() < rate('local') * 1.8) { mark('local'); log(pickFrom(local), 'local'); return; }
   const all = JD.roam.concat(JD.roamMore || []), fresh = all.filter(e => !recentSrc.has(e)), pool = fresh.length ? fresh : all;
-  const ev = pickFrom(pool), mon = pickFrom(mons);
+  const ev = pickFrom(pool), mon = monFor(ev, mons);
   const fx = gainC(ev.fx, JD.statGain.roam); addTraits(fx);
   const bd = addBond(mon, ev.fx && ev.fx.dark ? JD.bond.roamDark : JD.bond.roam);
   mark('daily'); log(fill(ev.t, net, mon), '', fx, null, bd); J.log[J.log.length - 1].src = ev; bondUp(bd);
@@ -413,10 +440,10 @@ function applyEvolution(evo){
   J.form = evo.name; J.stage = evo.stage; J.label = evo.label || evo.special || stageLabel(evo.stage);
   if (evo.branch) J.branch = evo.branch;
   if (evo.special) J.special = evo.special;
-  J.route.push({ form: evo.name, stage: evo.stage, label: J.label, cap: capacity(evo.name, evo.stage), regions: [], special: evo.special, path: evo.path });
+  J.route.push({ form: evo.name, stage: evo.stage, label: J.label, cap: evo.cap || evoCapacity(evo), regions: [], special: evo.special, path: evo.path });
 }
 async function playEvolution(evo, kind = 'EVOLUTION'){
-  const me = J, cap = capacity(evo.name, evo.stage), from = J.form;
+  const me = J, cap = evo.cap = evoCapacity(evo), from = J.form;
   await window.evoCinematic.play({ from, to: evo.name, partner: evo.partner, desc: infoOf(evo.name), kind, attr: attrOf(evo.name), fromCap: capacity(from, J.stage), label: [evo.label || evo.special || stageLabel(evo.stage), ATTR[attrOf(evo.name)][0]].join(' · '), cap, power: evo.special ? 4 : kind === 'CAPSULE EVOLUTION' ? 2 : evo.stage, speed: () => NET.speed || 1, alive: () => J === me });
   if (J !== me) return;
   await NET.evolveFx({ label: evo.name, img: null, sub: `${kind} · ${evo.label || evo.special || stageLabel(evo.stage)} · ${cap}`, title: `${from}${ga(from)} ${evo.name}${ro(evo.name)} 진화!` });
@@ -458,6 +485,12 @@ function specialEvolution(d){
   // 타락 (어비스의 fall 표): 천사가 어둠에 물들어 다시 한 번 진화해요
   const fallen = d.fall && d.fall[J.form];
   if (fallen) return { name: fallen, stage: 4, special: '타천사', path: '심연으로 타락', sub: 'FALL DOWN' };
+  // X항체: 이미 특별 진화한 모습도 X항체를 받아들일 수 있어요 (도감에 그 X항체 모습이 있을 때만, 한 번만)
+  if (J.special && d.suffix === 'X') {
+    if (/X$/.test(J.form) || J.special === d.special) return null;
+    const x = window.digiData && window.digiData(J.form + 'X');
+    return x && /\(X항체\)$/.test(x.name) ? { name: J.form + 'X', stage: 4, special: d.special, path: d.path, sub: d.sub } : null;
+  }
   if (J.special) return null;
   const en = J.dg.en, ult = J.stage >= 3 ? J.form : ([...J.dg.line].reverse().find(n => n && n !== '?') || J.form);
   let name = d.forms && d.forms[en];
@@ -487,11 +520,11 @@ async function travel(region){
   const evs = byName(JD.events, name) || ['새로운 노드에 도착했어요.'];
   log(`${name}에 도착했어요. ${pickFrom(evs)}`, 'arrive');
   if (evo) {
-    const from = J.form;
-    await window.evoCinematic.play({ from, to: evo.name, desc: infoOf(evo.name), kind: 'SPECIAL EVOLUTION', attr: attrOf(evo.name), label: evo.special, cap: capacity(evo.name, 4), power: 4, speed: () => NET.speed || 1, alive: () => J === me });
+    const from = J.form, fromCap = J.route[J.route.length - 1].cap; evo.cap = evoCapacity(evo);
+    await window.evoCinematic.play({ from, to: evo.name, desc: infoOf(evo.name), kind: 'SPECIAL EVOLUTION', attr: attrOf(evo.name), label: evo.special, cap: evo.cap, fromCap, power: 4, speed: () => NET.speed || 1, alive: () => J === me });
     if (J !== me) return;
     applyEvolution(evo); if (J.exp) J.map[J.exp - 1] = 'evo';
-    log(`${from}${ga(from)} ${evo.name}${ro(evo.name)} 진화했어요! (${evo.special} · ${capacity(evo.name, 4)})`, 'evo sp', null, evo.name);
+    log(`${from}${ga(from)} ${evo.name}${ro(evo.name)} 진화했어요! (${evo.special} · ${evo.cap})`, 'evo sp', null, evo.name);
   }
   checkUnlocks();
   await roam(res.region, me);
@@ -549,7 +582,7 @@ function buildOptions(region){
   }).sort((x, y) => y.w - x.w);
   const picks = [], used = new Set();
   for (const { a } of weighted) { const main = Object.keys(a.fx).sort((p, q) => a.fx[q] - a.fx[p])[0]; if (used.has(main)) continue; used.add(main); picks.push(a); if (picks.length === 3) break; }
-  return picks.map(a => { const m = pickFrom(mons); return { text: fill(a.t, net, m), fx: gainC(a.fx, JD.statGain.choice), mon: m, bond: actBond(a.fx), src: a }; });
+  return picks.map(a => { const m = monFor(a, mons); return { text: fill(a.t, net, m), fx: gainC(a.fx, JD.statGain.choice), mon: m, bond: actBond(a.fx), src: a }; });
 }
 let autoTimer = 0;
 // 자동 선택: 훈련 방침과 가장 잘 맞는 선택지를 미리 골라 두고, 시간이 지나면 그걸로 정해요
