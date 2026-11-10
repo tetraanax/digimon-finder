@@ -62,6 +62,9 @@
   //   hidden networks beyond the outer ring · 태양계 high above, 이그드라실 deep below
   const TAU = Math.PI * 2, RING1 = 5200, RING2 = 9600, RING3 = 13800, RING4 = 17600;
   const SOLAR_Y = -5200, YGG_Y = 5000;
+  // 사건의 지평선: 바깥 고리(RING4)보다 한참 먼 곳, 살짝 위. HOLE_R = 빛이 빠져나오지 못하는 검은 원의 반지름
+  const HORIZON_DIST = 27000, HORIZON_A = 2.35, HORIZON_Y = -2600, HOLE_R = 470;
+  let HORIZON = -1;
   const CONTINENT_ANCHOR = [];
   {
     const r = mulberry(4242);
@@ -85,6 +88,8 @@
       const a = k / HIDDEN.length * TAU + .55;
       SPECIAL.push([id, Math.cos(a) * RING4, (k % 2 ? -1 : 1) * (3600 + r() * 1600), Math.sin(a) * RING4, 1.3]);
     });
+    // 여정의 끝: 바깥으로 뻗은 가닥들 너머, 빛까지 삼키는 거대한 블랙홀
+    HORIZON = REGION_NAMES.length; REGION_NAMES.push('사건의 지평선'); REGION_EN.push('EVENT HORIZON'); REGION_COLOR.push(2); SECRETS.add(HORIZON);
   }
   // node kinds
   const DOT = 0, SQUARE = 1, DIAMOND = 2, RING = 3, CROSS = 4, HUB = 5, RELAY = 6, DUST = 7, BEAD = 8;
@@ -610,12 +615,12 @@
       });
     }
     // secret zones: built far above / below the world, joined by one long relay chain
-    const secret = (region, cx, cy, cz, build) => {
+    const secret = (region, cx, cy, cz, build, lux = LUX) => {
       curRegion = region;
       const c = clusters.length, col = REGION_COLOR[region];
       const hub = add(cx, cy, cz, col, HUB, 5, c), e0 = E.length;
       build(hub, c, col);
-      { const ids = []; let far = 0; for (let i = hub + 1; i < X.length; i++) { ids.push(i); far = Math.max(far, Math.sqrt(d2(hub, i))); }
+      if (lux) { const ids = []; let far = 0; for (let i = hub + 1; i < X.length; i++) { ids.push(i); far = Math.max(far, Math.sqrt(d2(hub, i))); }
         adorn(c, cx, cy, cz, Math.max(500, far * .85), col, e0, ids, LUX); }
       let best = hubs[0], bd = Infinity;
       for (const h of hubs) { const dd = d2(hub, h); if (dd < bd) { bd = dd; best = h; } }
@@ -655,10 +660,72 @@
       for (let b = 0; b < 3; b++) { const a = b / 3 * 6.283; grow(prev, 0, y, 0, Math.cos(a) * .6, -.8, Math.sin(a) * .6, 170, 5); }
     });
 
-    // floating data dust
+    // 바깥으로 뻗는 가닥: 바깥 고리의 구역들에서 노드가 우주 저편으로 길게 이어져요.
+    // 천천히 휘어 가며 점점 가늘어지고, 끝으로 갈수록 어두운 색이 섞여요. 군데군데 곁가지가 돋아요.
+    curRegion = -1;
+    {
+      const memb = clusters.map(() => []);
+      for (let i = 0; i < X.length; i++) if (CL[i] >= 0 && K[i] !== BEAD && K[i] !== HUB) memb[CL[i]].push(i);
+      const tendril = (from, dir, len, steps, col, s0, depth) => {
+        let p = from, [dx, dy, dz] = dir; const curl = (r() - .5) * 1.4 / steps, lift = (r() - .5) * .5 / steps, step = len / steps;
+        for (let q = 1; q <= steps; q++) {
+          const t = q / steps, ca = Math.cos(curl), sa = Math.sin(curl);
+          [dx, dz] = [dx * ca - dz * sa, dx * sa + dz * ca]; dy += lift; const m = Math.hypot(dx, dy, dz); dx /= m; dy /= m; dz /= m;
+          const jit = step * .22, cc = t > .65 && r() < t - .4 ? (r() < .5 ? 11 : 13) : r() < .88 ? col : Math.floor(r() * PALETTE.length);
+          const id = add(X[p] + dx * step + (r() - .5) * jit, Y[p] + dy * step + (r() - .5) * jit, Z[p] + dz * step + (r() - .5) * jit,
+            cc, q === steps && depth > 0 ? RING : RELAY, s0 * (1 - t * .72), -1);
+          link(p, id); p = id;
+          if (depth > 0 && q > 2 && q < steps - 3 && r() < .16) {
+            const s = r() < .5 ? -1 : 1, b = .5 + r() * .4, cb = Math.cos(b * s), sb = Math.sin(b * s);
+            tendril(id, [dx * cb - dz * sb, dy + (r() - .5) * .4, dx * sb + dz * cb], len * (.18 + r() * .2), 4 + (r() * 5 | 0), cc, s0 * (1 - t * .72) * .8, depth - 1);
+          }
+        }
+      };
+      clusters.forEach((cl, ci) => {
+        const rad = Math.hypot(cl.x, cl.z); if (rad < RING3 - 1500 || !memb[ci].length) return;
+        const ox = cl.x / rad, oz = cl.z / rad;
+        for (let k = 0, nt = 3 + (r() * 3 | 0); k < nt; k++) {
+          // 가장 바깥쪽에 있는 점에서 출발해요
+          let from = memb[ci][0], best = -Infinity;
+          for (let q = 0; q < 10; q++) { const i = memb[ci][r() * memb[ci].length | 0], v = (X[i] - cl.x) * ox + (Z[i] - cl.z) * oz; if (v > best) { best = v; from = i; } }
+          const d = randDir(), dir = [ox + d[0] * .6, d[1] * .35 + (cl.y < 0 ? -.08 : .08), oz + d[2] * .6], len = 4500 + r() * 6000;
+          tendril(from, dir, len, Math.round(18 + len / 320), cl.col, 1.35, 1);
+        }
+      });
+    }
+    // 사건의 지평선: 비스듬히 누운 강착원반(안쪽은 하얗게, 바깥으로 갈수록 붉게)과 원반으로 빨려 드는 나선 가닥.
+    // 가운데의 검은 원과 그 둘레로 휘어 보이는 빛 고리는 화면에 그릴 때 덧그려요 (frame 참고)
+    let holeHub = -1; const disk = [];
+    {
+      const hx = Math.cos(HORIZON_A) * HORIZON_DIST, hz = Math.sin(HORIZON_A) * HORIZON_DIST, tilt = .16, ct = Math.cos(tilt), st = Math.sin(tilt);
+      const P = (rad, a, h) => { const x = Math.cos(a) * rad, z0 = Math.sin(a) * rad; return [hx + x, HORIZON_Y - h * ct - z0 * st, hz + z0 * ct - h * st]; };
+      secret(HORIZON, hx, HORIZON_Y, hz, (core, c) => {
+        holeHub = core;
+        const NR = 18, cols = [10, 10, 10, 2, 2, 2, 2, 4, 4, 4, 4, 4, 7, 7, 4, 7, 12, 12];
+        let prevRing = null;
+        for (let k = 0; k < NR; k++) {
+          const u = k / (NR - 1), rad = HOLE_R * 1.22 + u * u * 1150 + u * 250, n = Math.round(70 + u * 90), ph = r() * 6.283, ring = [];
+          for (let i = 0; i < n; i++) { const a = ph + i / n * 6.283, [x, y, z] = P(rad + (r() - .5) * 18 * (1 + u * 3), a, (r() - .5) * 14 * (1 + u * 2));
+            ring.push(add(x, y, z, r() < .9 ? cols[k] : 10, i % 10 === 0 ? DOT : BEAD, (i % 10 === 0 ? 1.1 : .55 + r() * .5) * (1.25 - u * .4), c)); }
+          for (let i = 0; i < n; i++) link(ring[i], ring[(i + 1) % n]);
+          if (prevRing) for (let i = 0; i < n; i += 12) link(ring[i], prevRing[Math.round(i / n * prevRing.length) % prevRing.length]);
+          else for (let i = 0; i < n; i += 9) link(core, ring[i]);
+          disk.push(...ring); prevRing = ring;
+        }
+        for (let sI = 0; sI < 3; sI++) { const a0 = sI / 3 * 6.283; let p = prevRing[Math.round(sI / 3 * prevRing.length) % prevRing.length];
+          for (let q = 1; q <= 42; q++) { const t = q / 42, [x, y, z] = P(2700 - t * (2700 - HOLE_R * 1.3), a0 + t * 6.283 * 1.6, Math.sin(t * 9) * 30);
+            const id = add(x, y, z, t > .7 ? 2 : 4, q % 8 ? DOT : DIAMOND, 1.3 - t * .5, c); link(p, id); p = id; disk.push(id); } }
+      }, 0);
+    }
+
+    // floating data dust (바깥 가닥 너머 먼 우주까지 흩어져요)
     curRegion = -1;
     for (let i = 0; i < 900; i++) { const d = randDir(), rad = 600 + r() * 17000; add(d[0] * rad, d[1] * rad * .6, d[2] * rad, Math.floor(r() * PALETTE.length), DUST, .5 + r() * .7, -1); }
+    for (let i = 0; i < 700; i++) { const d = randDir(), rad = 18000 + r() * 16000; add(d[0] * rad, d[1] * rad * .45, d[2] * rad, r() < .6 ? 10 : Math.floor(r() * PALETTE.length), DUST, .4 + r() * .6, -1); }
 
+    // 원반의 선들 (검은 원 앞쪽에 있는 것만 다시 그릴 때 써요)
+    const holeSegs = [];
+    for (let e = 0; e < E.length; e += 2) if (RG[E[e]] === HORIZON && RG[E[e + 1]] === HORIZON && E[e] !== holeHub && E[e + 1] !== holeHub) holeSegs.push(E[e], E[e + 1]);
     const n = X.length, adj = Array.from({ length: n }, () => []);
     for (let i = 0; i < E.length; i += 2) { adj[E[i]].push(E[i + 1]); adj[E[i + 1]].push(E[i]); }
     // regions: centroid of their clusters + the nodes you can land on
@@ -669,6 +736,7 @@
       let rad = 0; for (const i of g.nodes) rad = Math.max(rad, Math.hypot(X[i] - g.x, Y[i] - g.y, Z[i] - g.z)); g.rad = rad || 600; });
     return { n, X: Float32Array.from(X), Y: Float32Array.from(Y), Z: Float32Array.from(Z), C: Uint8Array.from(C), K: Uint8Array.from(K),
       S: Float32Array.from(S), CL: Int16Array.from(CL), RG: Int8Array.from(RG), E: Uint32Array.from(E), adj, hubs, clusters,
+      horizon: { hub: holeHub, disk: Uint32Array.from(disk), segs: Uint32Array.from(holeSegs) },
       regions: regions.filter(g => g.clusters.length) };
   }
 
@@ -743,7 +811,7 @@
     }
     close() { this.active = false; cancelAnimationFrame(this.raf); removeEventListener('resize', this.resize); }
     /* mouse wheel + two-finger pinch change the zoom factor */
-    zoomBy(f) { this.zoom = Math.max(.2, Math.min(2.6, (this.zoom || 1) * f)); }
+    zoomBy(f) { this.zoom = Math.max(.2, Math.min(3.4, (this.zoom || 1) * f)); }
     rotateBy(dRot, dPitch = 0) { this.rot += dRot; this.pitch = Math.max(-1.25, Math.min(1.35, this.pitch + dPitch)); this.userRotT = performance.now(); }
     resetView() { this.rot = .6; this.pitch = .32; this.zoom = 1; this.userRotT = 0; }
     bindZoom() {
@@ -1101,6 +1169,36 @@
       }
 
       this.dotG.putImageData(this.dotI, 0, 0); g.globalAlpha = 1; g.drawImage(this.dotC, 0, 0);
+
+      /* 사건의 지평선: 휘어진 빛의 후광 → 뒤쪽 빛을 모두 가리는 검은 원 → 검은 원보다 앞에 있는 원반만 다시 → 광자 고리와 휘어 보이는 원반 뒷면 */
+      const HZ = G.horizon;
+      if (HZ && HZ.hub >= 0 && PZ[HZ.hub] > 30) {
+        const h = HZ.hub, hz0 = PZ[h], hx0 = PX[h], hy0 = PY[h], rr = HOLE_R * F / hz0;
+        if (rr > 1.2 && hx0 > -rr * 3 && hx0 < W + rr * 3 && hy0 > -rr * 3 && hy0 < H + rr * 3) {
+          g.globalCompositeOperation = 'lighter';
+          const halo = g.createRadialGradient(hx0, hy0, rr * .95, hx0, hy0, rr * 2.6);
+          halo.addColorStop(0, 'rgba(255,236,190,.55)'); halo.addColorStop(.18, 'rgba(251,146,60,.3)'); halo.addColorStop(.5, 'rgba(244,63,94,.09)'); halo.addColorStop(1, 'rgba(244,63,94,0)');
+          g.globalAlpha = 1; g.fillStyle = halo; g.beginPath(); g.arc(hx0, hy0, rr * 2.6, 0, 6.283); g.fill();
+          g.globalCompositeOperation = 'source-over';
+          g.fillStyle = '#000'; g.beginPath(); g.arc(hx0, hy0, rr, 0, 6.283); g.fill();
+          g.globalCompositeOperation = 'lighter';
+          const S2 = HZ.segs, pb = [], rr2 = rr * rr;
+          for (let k = 0; k < S2.length; k += 2) { const a = S2[k], b = S2[k + 1];
+            if (PZ[a] >= hz0 || PZ[b] >= hz0 || PZ[a] <= 30 || PZ[b] <= 30) continue;
+            const mx = (PX[a] + PX[b]) / 2 - hx0, my = (PY[a] + PY[b]) / 2 - hy0; if (mx * mx + my * my > rr2 * 1.3) continue;
+            const p = pb[G.C[a]] || (pb[G.C[a]] = new Path2D()); p.moveTo(PX[a], PY[a]); p.lineTo(PX[b], PY[b]); }
+          pb.forEach((p, ci) => { if (p) { g.strokeStyle = PALETTE[ci]; g.globalAlpha = .7; g.lineWidth = 1.4 * dpr; g.stroke(p); } });
+          const D = HZ.disk;
+          for (let k = 0; k < D.length; k++) { const i = D[k]; if (PZ[i] >= hz0 || PZ[i] <= 30) continue;
+            const dx = PX[i] - hx0, dy = PY[i] - hy0; if (dx * dx + dy * dy > rr2 * 1.1) continue;
+            const d = Math.max(1.4 * dpr, G.S[i] * F / PZ[i] * 2.4); g.globalAlpha = .9; g.fillStyle = PALETTE[G.C[i]]; g.fillRect(PX[i] - d / 2, PY[i] - d / 2, d, d); }
+          g.globalAlpha = .95; g.strokeStyle = '#fff3d6'; g.lineWidth = Math.max(1, rr * .05); g.beginPath(); g.arc(hx0, hy0, rr * 1.03, 0, 6.283); g.stroke();
+          const tw = .8 + .2 * Math.sin(now * .002);
+          g.globalAlpha = .38 * tw; g.strokeStyle = '#fdba74'; g.lineWidth = Math.max(1, rr * .22); g.beginPath(); g.ellipse(hx0, hy0, rr * 1.32, rr * 1.22, 0, 0, 6.283); g.stroke();
+          g.globalAlpha = .22 * tw; g.strokeStyle = '#facc15'; g.lineWidth = Math.max(1, rr * .1); g.beginPath(); g.ellipse(hx0, hy0, rr * 1.55, rr * 1.4, 0, 0, 6.283); g.stroke();
+          g.globalAlpha = 1;
+        }
+      }
 
       /* packet + trail */
       this.trail.forEach((tp, k) => { const p = proj(tp[0], tp[1], tp[2]); if (!p) return; const sz = (4 + k * .9) * dpr;

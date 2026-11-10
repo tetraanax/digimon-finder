@@ -185,7 +185,10 @@ const bucketOf = st => {
 };
 // 사건에 나오는 상대: 'strong'이면 파트너와 같거나 높은 단계, 'weak'이면 낮은 단계에서 골라요
 function monFor(ev, mons){
-  const foe = ev && ev.foe; if (!foe) return pickFrom(mons);
+  const foe = ev && ev.foe, jg = jogPair();
+  // 조그레스할 수 있는 모습이면, 마주치는 디지몬이 그 짝일 때가 많아요 (적으로 나오는 사건은 빼고)
+  if (!foe && jg && Math.random() < JD.bond.partnerMeet) return jg.b;
+  if (!foe) return pickFrom(mons);
   const p = Math.min(3, J.stage), st = m => stageOfMon(m);
   if (foe === 'strong') {
     const ok = mons.filter(m => st(m) !== null && st(m) >= p);
@@ -261,7 +264,7 @@ function rate(kind){
   const f = JD.focus[J.focus] || {}, w = curWorld();
   return (JD.rates[kind] ?? 1) * ((f.mod && f.mod[kind]) || 1) * ((w && w.mod && w.mod[kind]) || 1);
 }
-// 훈련 방침: 걸음마다 조금씩 성장 + 컨디션 회복 (기록에는 남기지 않아요)
+// 모험 방향: 걸음마다 조금씩 성장 + 컨디션 회복 (기록에는 남기지 않아요)
 function applyFocus(){
   const f = JD.focus[J.focus] || JD.focus.free, w = curWorld();
   addCond(JD.cond.regen + (f.cond || 0) + ((w && w.regen) || 0));
@@ -302,6 +305,12 @@ async function stepEvent(region){
     if (c.fork) return forkEvent({ t: c.t, fork: c.fork }, 'chain', region, p.mon);
     return simpleEvent(c, 'chain', net, p.mon);
   }
+  // 조그레스 짝이 찾아와요 (조그레스할 수 있는 모습이면 다른 일보다 먼저, 자주)
+  if (jg && bondOf(jg.b) < JD.bond.jogress && r() < rate('partner')) {
+    const fx = gainC({ friend: 1 }, JD.statGain.roam); addTraits(fx);
+    const bd = addBond(jg.b, randInt(JD.bond.partnerGain));
+    mark('bond'); log(fill(pickFrom(JD.partnerVisits), net, jg.b), 'bond', fx, jg.b, bd); bondUp(bd); return;
+  }
   // 2) 세계 사건: 끝나거나, 새로 시작
   if (J.world && J.exp >= J.world.until) { const w = curWorld(); J.world = null; mark('world'); log(`🌐 ${w.end}`, 'world'); return; }
   if (!J.world && J.exp > 8 && r() < rate('world')) {
@@ -312,12 +321,6 @@ async function stepEvent(region){
   }
   // 3) 희귀
   if (r() < rate('rare')) { const ev = pickFrom(JD.rares); return simpleEvent(ev, 'rare', net, monFor(ev, mons)); }
-  // 4) 조그레스 짝이 찾아와요
-  if (jg && bondOf(jg.b) < JD.bond.jogress && r() < rate('partner')) {
-    const fx = gainC({ friend: 1 }, JD.statGain.roam); addTraits(fx);
-    const bd = addBond(jg.b, randInt(JD.bond.partnerGain));
-    mark('bond'); log(fill(pickFrom(JD.partnerVisits), net, jg.b), 'bond', fx, jg.b, bd); bondUp(bd); return;
-  }
   // 5) 디지멘탈 캡슐 발견 (성장기 · 성숙기)
   // 지금 모습이 그 디지멘탈로 아머진화한다는 근거(Wikimon 진화 후 목록)가 있을 때만 나와요
   const armors = J.special || J.capsuled || J.stage > 1 ? [] : JD.digimentals.filter(d => d.armor !== J.form && evolvesInto(J.form, d.armor) && (!d.rare || r() < .15));
@@ -372,8 +375,30 @@ function startJourney(){
   netEl.classList.add('explore'); NET.setExplore(true); NET.setStay(false);
   $('journey').hidden = false;
   requestAnimationFrame(updateInset);
-  log(`${dg.ko}${wa(dg.ko)} 함께 여행을 떠나요. 가고 싶은 네트워크 구역을 눌러 보세요. 마우스 휠로 지도를 확대·축소할 수 있어요.`, 'sys');
-  idleStatus();
+  pickDirection();
+}
+// 떠나기 전에 모험 방향을 한 번 골라요 (지난번 고른 방향이 미리 표시돼요). 여행 중에도 패널에서 바꿀 수 있어요
+function pickDirection(){
+  const me = J;
+  $('journey').hidden = true;
+  $('netStat').innerHTML = `JOURNEY START · ${esc(J.dg.ko)}<b>모험 방향을 골라 주세요</b>`;
+  card.innerHTML = `
+    <div class="tag">JOURNEY START · DIRECTION</div>
+    <p class="eyebrow">떠나기 전에</p>
+    <h2 class="sum-title dir-title">모험 방향을 골라 주세요</h2>
+    <p class="desc">${esc(J.dg.ko)}${wa(J.dg.ko)} 어떤 여행을 할까요? 고른 방향의 성향이 걸음마다 저절로 자라고, 일어나는 사건도 조금 달라져요. 여행 중에도 패널에서 언제든 바꿀 수 있어요.</p>
+    <div class="dir-list" role="radiogroup" aria-label="모험 방향">${Object.entries(JD.focus).map(([k, f]) => `<button type="button" class="dir-b${k === J.focus ? ' on' : ''}" data-f="${k}" role="radio" aria-checked="${k === J.focus}"><b><i aria-hidden="true">${f.icon}</i>${esc(f.name)}</b><small>${esc(f.desc)}</small></button>`).join('')}</div>`;
+  card.hidden = false; card.scrollTop = 0;
+  requestAnimationFrame(() => card.classList.add('in'));
+  card.querySelector('.dir-b.on')?.focus({ preventScroll: true });
+  card.querySelector('.dir-list').onclick = e => {
+    const b = e.target.closest('[data-f]'); if (!b || J !== me) return;
+    J.focus = b.dataset.f; try { localStorage.setItem('digi-focus', J.focus); } catch (er) {}
+    hideCard(); $('journey').hidden = false; requestAnimationFrame(updateInset); renderJourney();
+    const f = JD.focus[J.focus], ko = J.dg.ko;
+    log(`${ko}${wa(ko)} 「${f.name}」 방향으로 여행을 떠나요. ${f.desc}. 가고 싶은 네트워크 구역을 눌러 보세요. 마우스 휠로 지도를 확대·축소할 수 있어요.`, 'sys');
+    idleStatus();
+  };
 }
 function endJourney(){
   J = null; NET.setExplore(false); NET.setStay(false); NET.speed = 1;
@@ -508,6 +533,9 @@ function checkUnlocks(){
     NET.unlock(id);
     log(`✦ 어딘가에서 낯선 신호가 잡혔어요. 숨겨진 구역 「${d.region}」${ga(d.region)} 지도에 나타났어요! 지도를 축소해서 찾아보세요.`, 'secret');
   }
+  // 여정의 끝 구역 (사건의 지평선)
+  const hz = NET.regionId(JD.horizon.region);
+  if (hz >= 0 && !NET.unlocked.has(hz) && J.exp >= JD.horizon.at) { NET.unlock(hz); log(JD.horizon.found, 'secret'); }
 }
 function specialEvolution(d){
   if (!d) return null;
@@ -537,8 +565,8 @@ async function travel(region){
   if (!J || J.busy || busy || !card.hidden) return;
   if (region === -2) { log('아직 신호가 닿지 않는 구역이에요.', 'sys'); return; }
   if (region < 0 || !NET.isOpen(region)) return;
-  const me = J, secret = NET.isSecretRegion(region);
-  const evo = secret ? specialEvolution(secretDef(NET.regionName(region))) : null;
+  const me = J, secret = NET.isSecretRegion(region), finale = NET.regionName(region) === JD.horizon.region;
+  const evo = secret && !finale ? specialEvolution(secretDef(NET.regionName(region))) : null;
   const opts = {};
   if (evo) window.evoCinematic.preload(evo.name);
   J.busy = true; NET.hover = -1; $('journey').classList.add('busy');
@@ -549,8 +577,18 @@ async function travel(region){
   J.moves++; J.visited.add(region);
   if (!secret) { J.recent.push(name); J.recent = J.recent.slice(-5); }
   J.route[J.route.length - 1].regions.push(name.replace(' 네트워크', ''));
-  const evs = byName(JD.events, name) || ['새로운 노드에 도착했어요.'];
+  const evs = finale ? JD.horizon.arrive : byName(JD.events, name) || ['새로운 노드에 도착했어요.'];
   log(`${name}에 도착했어요. ${pickFrom(evs)}`, 'arrive');
+  if (finale) {
+    // 사건의 지평선: 더 돌아다니지 않고, 그 자리에서 여정을 마무리해요
+    NET.setStay(true, region);
+    if (!(await sleep(JD.roamPause, me))) return;
+    log(`${J.form}${wa(J.form)} ${JD.horizon.finale}`, 'rare');
+    J.horizon = true; J.ended = true; renderJourney();
+    if (!(await sleep(JD.roamPause * .8, me))) return;
+    J.busy = false; $('journey').classList.remove('busy'); NET.setStay(false); idleStatus();
+    showLog(true); return;
+  }
   if (evo) {
     const from = J.form, fromCap = J.route[J.route.length - 1].cap; evo.cap = evoCapacity(evo);
     await window.evoCinematic.play({ from, to: evo.name, desc: infoOf(evo.name), kind: 'SPECIAL EVOLUTION', attr: attrOf(evo.name), label: evo.special, cap: evo.cap, fromCap, power: 4, alive: () => J === me });
@@ -617,7 +655,7 @@ function buildOptions(region){
   return picks.map(a => { const m = monFor(a, mons); return { text: fill(a.t, net, m), fx: gainC(a.fx, JD.statGain.choice), mon: m, bond: actBond(a.fx), src: a }; });
 }
 let autoTimer = 0;
-// 자동 선택: 훈련 방침과 가장 잘 맞는 선택지를 미리 골라 두고, 시간이 지나면 그걸로 정해요
+// 자동 선택: 모험 방향과 가장 잘 맞는 선택지를 미리 골라 두고, 시간이 지나면 그걸로 정해요
 function autoPick(opts){
   const f = JD.focus[J.focus] || {}, t = f.trait;
   let best = 0, bs = -1e9;
@@ -740,7 +778,7 @@ function renderJourney(){
   $('jStatus').innerHTML = `<div class="cond ${cl}" title="컨디션: 다치면 내려가고 걸음마다 회복해요. ${JD.cond.low} 아래면 성장이 절반, ${JD.cond.evolveMin} 아래면 진화가 미뤄져요"><span>컨디션</span><div class="bar"><i style="width:${J.cond}%"></i></div><b>${J.cond}</b></div>` +
     (w ? `<span class="world" title="${esc(w.start)}">🌐 ${esc(w.name)} · ${Math.max(0, J.world.until - J.exp)}걸음</span>` : '');
   const fc = JD.focus[J.focus] || JD.focus.free;
-  $('jFocus').innerHTML = `<span class="f-h">훈련 방침</span><div class="f-list">${Object.entries(JD.focus).map(([k, f]) => `<button type="button" class="f-b${k === J.focus ? ' on' : ''}" data-f="${k}" role="radio" aria-checked="${k === J.focus}" title="${esc(f.desc)}"><i aria-hidden="true">${f.icon}</i>${esc(f.name)}</button>`).join('')}</div><p class="f-desc">${esc(fc.desc)}</p>`;
+  $('jFocus').innerHTML = `<span class="f-h">모험 방향</span><div class="f-list">${Object.entries(JD.focus).map(([k, f]) => `<button type="button" class="f-b${k === J.focus ? ' on' : ''}" data-f="${k}" role="radio" aria-checked="${k === J.focus}" title="${esc(f.desc)}"><i aria-hidden="true">${f.icon}</i>${esc(f.name)}</button>`).join('')}</div><p class="f-desc">${esc(fc.desc)}</p>`;
   $('jLog').innerHTML = J.log.slice(-6).map(l => `<li class="${l.cls}">${esc(l.text)}${chipsOf(l.fx, l.bond, l.cond) ? ' ' + chipsOf(l.fx, l.bond, l.cond) : ''}</li>`).join('');
   $('jLog').scrollTop = $('jLog').scrollHeight;
   $('jProg').style.width = Math.min(100, J.exp / JD.journeyEnd * 100) + '%';
@@ -785,16 +823,16 @@ function showLog(final = false){
   const topT = [...TRAITS].sort((a, b) => J.traits[b] - J.traits[a])[0];
   const best = Object.entries(J.bonds).sort((a, b) => b[1] - a[1])[0];
   card.innerHTML = `
-    <div class="tag">${final ? 'JOURNEY COMPLETE' : 'JOURNEY LOG'} · ${J.moves} TRIPS · ${J.exp} STEPS · ${J.visited.size} REGIONS</div>
-    ${final ? '<p class="eyebrow">여행의 끝</p>' : ''}
+    <div class="tag">${final ? 'JOURNEY COMPLETE' : 'JOURNEY LOG'}${J.horizon ? ' · EVENT HORIZON' : ''} · ${J.moves} TRIPS · ${J.exp} STEPS · ${J.visited.size} REGIONS</div>
+    ${final ? `<p class="eyebrow">${J.horizon ? '사건의 지평선 너머로' : '여행의 끝'}</p>` : ''}
     ${picOf(J.form) ? `<div class="sum-pic">${picTag(J.form, '')}</div>` : ''}
     <h2 class="sum-title">${esc(J.form)}</h2>
     <p class="cap-line">${esc(J.label)} · ${capacity(J.form, J.stage)}</p>
-    <p class="desc">${esc(J.dg.ko)}${wa(J.dg.ko)} 함께 ${J.moves}번 이동하고 ${J.exp}걸음을 걸으며 ${J.visited.size}개 구역을 여행했어요. 가장 강한 성향은 <b class="spt">${JD.traits[topT]}</b>${bat(JD.traits[topT]) > 0 ? '이에요' : '예요'}.${best && best[1] > 0 ? ` 가장 친한 친구는 <b class="spt">${esc(best[0])}</b>(${bondTier(best[1])} · 친밀도 ${best[1]})${bat(best[0]) > 0 ? '이에요' : '예요'}.` : ''}${sp ? ` 숨겨진 구역을 찾아 <b class="spt">${sp}</b>${ro(sp)} 특별 진화했어요!` : ''}</p>
+    <p class="desc">${esc(J.dg.ko)}${wa(J.dg.ko)} 함께 ${J.moves}번 이동하고 ${J.exp}걸음을 걸으며 ${J.visited.size}개 구역을 여행했어요. 가장 강한 성향은 <b class="spt">${JD.traits[topT]}</b>${bat(JD.traits[topT]) > 0 ? '이에요' : '예요'}.${best && best[1] > 0 ? ` 가장 친한 친구는 <b class="spt">${esc(best[0])}</b>(${bondTier(best[1])} · 친밀도 ${best[1]})${bat(best[0]) > 0 ? '이에요' : '예요'}.` : ''}${sp ? ` 숨겨진 구역을 찾아 <b class="spt">${sp}</b>${ro(sp)} 특별 진화했어요!` : ''}${J.horizon ? ' 그리고 마침내 네트워크의 가장 먼 끝, <b class="spt">사건의 지평선</b>에 닿아 여정을 마쳤어요.' : ''}</p>
     ${journeyMap()}
     <ol class="timeline">${J.route.map(r => `<li class="${r.special ? 'sp' : ''}"><span class="st">${esc(r.label)}<br>${esc(r.cap)}</span><b>${picTag(r.form, 'tl-pic')}${esc(r.form)}</b><small>${esc(r.path)}${r.regions.length ? ' · ' + esc(r.regions.join(' → ')) : ''}</small></li>`).join('')}</ol>
     <div class="actions">
-      <button class="ghost primary" id="jCont" type="button">계속 여행하기</button>
+      <button class="ghost primary" id="jCont" type="button">${J.horizon ? '지평선을 벗어나 계속 여행하기' : '계속 여행하기'}</button>
       <button class="ghost" id="jCopy" type="button">기록 복사</button>
       <button class="ghost" id="jHome2" type="button">처음으로</button>
     </div>`;
@@ -819,7 +857,7 @@ $('jEnd').addEventListener('click', () => showLog());
 $('jFocus').addEventListener('click', e => {
   const b = e.target.closest('[data-f]'); if (!b || !J || b.dataset.f === J.focus) return;
   J.focus = b.dataset.f; try { localStorage.setItem('digi-focus', J.focus); } catch (er) {}
-  log(`훈련 방침을 「${JD.focus[J.focus].name}」${ro(JD.focus[J.focus].name)} 바꿨어요. ${JD.focus[J.focus].desc}`, 'sys');
+  log(`모험 방향을 「${JD.focus[J.focus].name}」${ro(JD.focus[J.focus].name)} 바꿨어요. ${JD.focus[J.focus].desc}`, 'sys');
 });
 function autoOn(){ return $('jAuto').getAttribute('aria-pressed') === 'true'; }
 function setAuto(on){ $('jAuto').setAttribute('aria-pressed', on ? 'true' : 'false'); $('jAuto').classList.toggle('on', on); try { localStorage.setItem('digi-auto', on ? '1' : '0'); } catch (er) {} }

@@ -5,6 +5,12 @@ window.JOURNEY = {
   evolveNeed: [{ top: 100, total: 300, steps: 12 }, { top: 280, total: 900, steps: 40 }, { top: 520, total: 1800, steps: 80 }],
   // 여행의 끝: 이 걸음 수에 닿으면 그 구역 탐험을 마치고 여행 기록이 나와요 (한 판 약 30분). 이후에도 계속 여행할 수 있어요
   journeyEnd: 160,
+  // 사건의 지평선: 네트워크 가장 바깥 너머의 블랙홀. 이 걸음 수부터 지도에 나타나고(화면에는 조건을 알려 주지 않아요),
+  // 들어가면 더 돌아다니지 않고 그 자리에서 여정을 마무리해요
+  horizon: { region: '사건의 지평선', at: 120,
+    found: '✦ 네트워크 가장 먼 바깥에서 모든 신호를 빨아들이는 거대한 중력이 느껴져요. 「사건의 지평선」이 지도에 나타났어요.',
+    arrive: ['빛조차 빠져나오지 못하는 검은 원 둘레로 데이터의 원반이 끝없이 돌고 있어요.', '시간이 느리게 흐르는 곳이에요. 지나온 모든 걸음이 원반 위에서 한꺼번에 반짝였어요.'],
+    finale: '함께 지평선 앞에 섰어요. 지금까지 걸어온 기록이 한 점으로 모여 네트워크에 영원히 새겨졌어요.' },
   // 한 구역에 들어가면: 몇 걸음 돌아다닐지, 걸음 사이 쉬는 시간(ms). 선택지가 나오는 비율은 아래 pace
   roamSteps: [6, 8], roamPause: 3200,
   // 성향 점수: 최대치, 얻는 양의 배율(선택지 / 돌아다니다 생긴 일), 정통 진화로 보는 성향 차이
@@ -72,10 +78,11 @@ window.JOURNEY = {
      여행 중 만난 디지몬마다 친밀도(0~100)가 쌓여요.
      - 선택지에 나온 디지몬: 만나기만 해도 meet, 거기에 행동의 성향 점수 × act / 2 (도와주면 크게 오르고, 몰아내거나 흡수하면 내려가요)
      - 구역을 돌아다니다 마주친 디지몬: roam (어둠 사건이면 roamDark)
-     - 지금 모습의 조그레스 짝은 걸음마다 rates.partner 확률로 저절로 찾아오고, 함께하면 partnerGain만큼 올라요
+     - 지금 모습의 조그레스 짝은 걸음마다 rates.partner 확률로 (다른 일보다 먼저) 저절로 찾아오고, 함께하면 partnerGain만큼 올라요
+     - 그 밖에 선택지나 구역에서 마주치는 디지몬도 partnerMeet 확률로 그 짝이에요 (적으로 나오는 사건은 빼고)
      - tiers: 친밀도 단계 이름 (단계가 오르면 기록에 남아요) */
   bond: {
-    max: 100, jogress: 80, meet: 3, roam: 2, roamDark: -3, partnerGain: [18, 26],
+    max: 100, jogress: 80, meet: 3, roam: 2, roamDark: -3, partnerGain: [18, 26], partnerMeet: .5,
     act: { friend: 9, courage: 5, wisdom: 4, power: 0, dark: -10 },
     tiers: [[0, '낯선 사이'], [20, '아는 사이'], [45, '친구'], [80, '단짝'], [100, '영혼의 짝']],
   },
@@ -237,13 +244,13 @@ window.JOURNEY = {
      대부분의 걸음은 저절로 일어나는 사건으로 흘러가고, 선택은 갈림길에서만 나와요.
      - 도착할 때 choiceArrive 확률, 돌아다니는 걸음마다 choiceRoam 확률로 행동 선택지
      - 그 밖에 조그레스 · 캡슐 · 위기 · 친구의 부탁 · 되돌아온 인연 같은 '갈림길'이 생기면 그때 골라요
-     - 평소 성장은 '훈련 방침(focus)'이 걸음마다 조금씩 쌓아 줘요 (언제든 바꿀 수 있어요) */
+     - 평소 성장은 '모험 방향(focus)'이 걸음마다 조금씩 쌓아 줘요 (언제든 바꿀 수 있어요) */
   pace: { choiceArrive: .4, choiceRoam: .09, autoPickMs: 9000 },
 
-  // 훈련 방침: 걸음마다 성향 점수 gain (+0~2 운). 사건이 일어나는 비율도 조금 바꿔요 (mod: 사건 종류별 배율)
+  // 모험 방향: 걸음마다 성향 점수 gain (+0~2 운). 사건이 일어나는 비율도 조금 바꿔요 (mod: 사건 종류별 배율)
   focus: {
     free:    { name: '자유롭게', icon: '◇', desc: '그날그날 마음 가는 대로 — 매번 다른 성향이 조금씩', gain: 6 },
-    courage: { name: '모험',     icon: '⚑', trait: 'courage', desc: '낯선 노드로 뛰어들어요 — 용기, 위기와 행운이 잦아요', gain: 7, mod: { danger: 1.4, luck: 1.4 } },
+    courage: { name: '도전',     icon: '⚑', trait: 'courage', desc: '낯선 노드로 뛰어들어요 — 용기, 위기와 행운이 잦아요', gain: 7, mod: { danger: 1.4, luck: 1.4 } },
     friend:  { name: '교류',     icon: '♥', trait: 'friend',  desc: '만나는 디지몬과 어울려요 — 우정, 친구 사건이 잦아요', gain: 7, mod: { bond: 1.8, danger: .8 } },
     wisdom:  { name: '탐구',     icon: '✎', trait: 'wisdom',  desc: '로그와 코드를 파고들어요 — 지혜, 희귀한 발견이 잦아요', gain: 7, mod: { rare: 1.8, local: 1.4 } },
     power:   { name: '수련',     icon: '✊', trait: 'power',   desc: '몸을 단련해요 — 힘, 다치는 일도 잦아요', gain: 7, mod: { danger: 1.3 } },
@@ -255,7 +262,7 @@ window.JOURNEY = {
   cond: { start: 100, regen: 3, low: 30, evolveMin: 40, evolveHeal: 30 },
 
   // 저절로 일어나는 사건의 기본 비율 (걸음마다 하나). 남은 비율은 평범한 하루(roam)예요
-  rates: { danger: .09, luck: .06, rare: .012, bond: .08, local: .14, world: .02, capsule: .03, partner: .28 },
+  rates: { danger: .09, luck: .06, rare: .012, bond: .08, local: .14, world: .02, capsule: .03, partner: .6 },
 
   // 위기: 컨디션이 깎여요. fork가 있으면 갈림길이 돼요
   dangers: [
