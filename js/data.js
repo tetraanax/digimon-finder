@@ -18,7 +18,7 @@ window.DIGI = [
   {ko:'아르마몬',en:'Armadillomon',attr:'fre',type:'포유류형',size:3,vibe:['calm','gentle'],line:['황금아르마몬','?','?'],img:'',d:'느긋하고 여유로운 성격. 곁에 있으면 마음이 편안해져요.'},
   {ko:'길몬',en:'Guilmon',attr:'vir',type:'파충류형',size:3,vibe:['wild','gentle'],line:['그라우몬','메가로그라우몬','듀크몬'],img:'',d:'빵을 좋아하는 순진한 대식가. 하지만 숨은 힘은 엄청나요.'},
   {ko:'테리어몬',en:'Terriermon',attr:'vac',type:'짐승형',size:1,vibe:['wild','calm'],line:['가르고몬','래피드몬','세인트가르고몬'],img:'',d:'"괜찮아, 괜찮아"가 입버릇인 낙천가. 귀로 날 수도 있어요.'},
-  {ko:'레나몬',en:'Renamon',attr:'dat',type:'짐승형',size:2,vibe:['calm','clever'],line:['구미호몬','타오우몬','샤크라몬'],img:'',d:'냉정하고 독립적이지만, 신뢰하는 상대에겐 누구보다 충실해요.'},
+  {ko:'레나몬',en:'Renamon',attr:'dat',type:'짐승형',size:2,vibe:['calm','clever'],line:['구미호몬','도사몬','샤크라몬'],img:'',d:'냉정하고 독립적이지만, 신뢰하는 상대에겐 누구보다 충실해요.'},
   {ko:'로프몬',en:'Lopmon',attr:'dat',type:'짐승형',size:1,vibe:['gentle','calm'],line:['토리에몬','안티라몬','케루비몬(선)'],img:'',d:'얌전하고 배려심 깊어요. 작은 변화도 먼저 알아채 줘요.'},
   {ko:'임프몬',en:'Impmon',attr:'vir',type:'마인형',size:1,vibe:['wild','clever'],line:['?','?','베르제브몬'],img:'',d:'삐딱하고 말썽꾸러기지만 속은 의외로 여린 반항아예요.'},
   {ko:'가오몬',en:'Gaomon',attr:'dat',type:'짐승형',size:2,vibe:['brave','calm'],line:['가오가몬','마하가오가몬','미라쥬가오가몬'],img:'',d:'규칙과 훈련을 중시하는 성실한 파이터. 주인을 향한 충성심이 깊어요.'},

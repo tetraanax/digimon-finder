@@ -32,11 +32,11 @@
     if (!(e && e.row[0]) && /X$/.test(n)) e = entry(n.slice(0, -1));   // X항체 그림이 없으면 기본 모습
     return e && e.row[0] ? DB_DIR + e.row[0] : null;
   }
-  // 도감 정보: { name(공식 이름), level, type, attribute, attacks[], related[] } 또는 null
+  // 도감 정보: { name(공식 이름), level, type, attribute, attacks[], related[], evolvesTo[[이름, 대표, 근거]] } 또는 null
   function dataFor(name) {
     const e = entry(name); if (!e) return null;
-    const [, level, type, attribute, attacks, related] = e.row;
-    return { name: e.name, level, type, attribute, attacks, related };
+    const [, level, type, attribute, attacks, related, evolvesTo] = e.row;
+    return { name: e.name, level, type, attribute, attacks, related, evolvesTo: evolvesTo || [] };
   }
   window.digiImage = fileFor;
   window.digiData = dataFor;
