@@ -7,6 +7,15 @@
 const fs = require('fs'), path = require('path');
 const FILE = path.join(__dirname, '..', 'digimon.json'), RAW = path.join(__dirname, 'wikimon-raw.json');
 const API = 'https://wikimon.net/api.php', UA = { 'User-Agent': 'digimon-finder fan project (non-commercial)' };
+const ALIAS = {
+  armamon_burstmode: 'Armamon: Burst Mode', cerunumon: 'Cernumon', fenriloogamon_takemikazuchi: 'Fenriloogamon: Takemikazuchi',
+  huanglongmon_ruin: 'Huanglongmon: Ruin Mode', baalmon_x: 'Baalmon (X-Antibody)', imperialdramonfightermode_vi: 'Imperialdramon: Fighter Mode (Black)',
+  greymon_blue_x: 'Greymon (Blue) (X-Antibody)', luminamon_nene: 'Luminamon (Nene Ver.)', heraklekabuterimon_x: 'Herakle Kabuterimon (X-Antibody)',
+  kazuchimon: 'Kazuchimon', algomon_lv4: 'Algomon (Adult)', algomon: 'Algomon (Ultimate)', ginkakumon_promote: 'Ginkakumon Promote',
+  ragnaloardmon: 'Ragna Lordmon', justimon_criticalarm: 'Justimon: Critical Arm', 'madleomon:armedmode': 'Mad Leomon: Armed Mode',
+  'miragegaogamon:burstmode': 'Mirage Gaogamon: Burst Mode', 'sakuyamon:mikomode': 'Sakuyamon: Miko Mode', 'omegamon-alter-s': 'Omegamon Alter-S',
+  'alphamon:ouryuken': 'Alphamon: Ouryuken', 'aegiochusmon:blue': 'Aegiochusmon: Blue', 'aegiochusmon:dark': 'Aegiochusmon: Dark', 'aegiochusmon:green': 'Aegiochusmon: Green',
+};
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 async function api(params) {
   const url = API + '?' + new URLSearchParams({ format: 'json', ...params });
@@ -67,9 +76,25 @@ function evolvesTo(w) {
     const m = /^\*+\s*('''|'')?\[\[([^\]|#]+)(?:\|[^\]]*)?\]\]/.exec(line); if (!m) continue;
     const target = m[2].trim(); if (/Colors and Levels|^Any /i.test(target)) continue;
     const src = sources(line, named); if (!src.length) continue;
-    out.push({ to: target, main: m[1] === "'''", src });
+    out.push({ to: target, main: m[1] === "'''", src, ...withPart(line.slice(m.index + m[0].length)) });
   }
   return out;
+}
+// "(with …)" 부분: 함께 있어야 하는 짝(조그레스) · 디지멘탈 · 그 밖의 아이템
+//   with  [[A]] or [[B]]  → 짝 A 또는 B 와 함께여야 해요 (req)
+//   with or without [[A]] → 혼자서도, A 와 함께도 돼요 (opt)
+//   with [[A]] and [[B]]  → 셋 이상이 합쳐져요 (multi: 이 게임에서는 쓰지 않아요)
+//   with a Data Attribute … / certain Digimon … → 정해진 짝이 없어요 (vague)
+function withPart(rest) {
+  const clean = rest.replace(/<ref[^>]*\/>|<ref[\s\S]*?<\/ref>/g, '').replace(/\{\{(?:ref|rfc|rfe|refd)\|(?:[^{}]|\{\{[^{}]*\}\})*\}\}/g, '');
+  const i = clean.search(/\(\s*with\b/i); if (i < 0) return {};
+  let d = 0, j = i; for (; j < clean.length; j++) { if (clean[j] === '(') d++; else if (clean[j] === ')' && --d === 0) break; }
+  const p = clean.slice(i, j + 1), links = [...p.matchAll(/\[\[([^\]|#]+)/g)].map(x => x[1].trim());
+  const dm = (/Digimental of (\w+)/i.exec(p) || [])[1] || null;
+  const GROUP = /Colors and Levels|Attributes and Levels|Final Xros|Units|Pendulum|Bracelet|Category|Wikia|Series/i;   // "이런 디지몬들과 함께" 같은 묶음
+  const mons = links.filter(l => !/Digimental|Crest|Spirit|Digivice|Card/i.test(l) && !GROUP.test(l));
+  return { opt: /\(\s*with or without/i.test(p), withMons: mons, multi: /\]\]\s*,?\s*and\s+(?:the\s+)?\[\[/i.test(p),
+    vague: !mons.length && !dm && (links.some(l => GROUP.test(l)) || /\{\{Wikia/i.test(p)) || !mons.length && !dm && /\b(any|attribute|certain|every|a|an)\b/i.test(p.replace(/\[\[[^\]]*\]\]/g, '')), dm };
 }
 
 (async () => {
@@ -84,6 +109,8 @@ function evolvesTo(w) {
   // 도감 id 가 적혀 있지 않은 문서: 영문 이름을 그대로 줄인 것이 도감 id 와 같으면 짝지어요 (Sunflowmon → sunflowmon)
   for (const t of Object.keys(titleToIds)) { const id = t.toLowerCase().replace(/[^a-z0-9]/g, '');
     if (!titleToIds[t].length && idSet.has(id) && !pageOf[id]) { pageOf[id] = t; titleToIds[t] = [id]; } }
+  // 그래도 남은 것: 도감 id 와 Wikimon 문서 이름이 많이 다른 경우 (직접 확인해서 짝지었어요)
+  for (const [id, t] of Object.entries(ALIAS)) if (idSet.has(id) && pages[t] && !pageOf[id]) { pageOf[id] = t; if (!titleToIds[t].includes(id)) titleToIds[t].push(id); }
   for (const d of list) {
     const id = d.info && d.info.id, t = pageOf[id];
     delete d.info.evolvesTo; delete d.info.wikimon;
@@ -91,11 +118,20 @@ function evolvesTo(w) {
     linked++; d.info.wikimon = t;
     const seen = new Map();
     for (const e of evolvesTo(pages[t])) for (const to of (titleToIds[e.to] || []).filter(x => idSet.has(x) && x !== id)) {
+      // 짝: 우리 도감에 있는 디지몬만. 정해진 짝 없이 "어떤 디지몬과 함께" 이거나 셋 이상이 합쳐지는 줄은 버려요
+      const partners = [...new Set((e.withMons || []).flatMap(m => titleToIds[m] || []).filter(x => idSet.has(x) && x !== id && x !== to))];
+      const needsPartner = !e.opt && (e.withMons || []).length > 0;
+      if (!e.opt && (e.multi || e.vague)) continue;
+      if (needsPartner && !partners.length) continue;
+      const solo = !needsPartner;
       const prev = seen.get(to);
-      if (prev) { prev.main = prev.main || e.main; e.src.forEach(s => prev.src.includes(s) || prev.src.push(s)); }
-      else seen.set(to, { id: to, main: e.main, src: [...e.src] });
+      if (prev) { prev.main = prev.main || e.main; prev.solo = prev.solo || solo; e.src.forEach(s => prev.src.includes(s) || prev.src.push(s));
+        partners.forEach(p => prev.with.includes(p) || prev.with.push(p)); prev.dm = prev.dm || e.dm; }
+      else seen.set(to, { id: to, main: e.main, src: [...e.src], solo, with: partners, dm: e.dm });
     }
-    d.info.evolvesTo = [...seen.values()]; edges += seen.size;
+    // solo: 혼자서 진화할 수 있어요 · with: 함께 조그레스할 수 있는 짝 · dm: 필요한 디지멘탈(영문)
+    d.info.evolvesTo = [...seen.values()].map(e => ({ id: e.id, main: e.main, src: e.src, ...(e.solo ? {} : { solo: false }), ...(e.with.length ? { with: e.with } : {}), ...(e.dm ? { dm: e.dm } : {}) }));
+    edges += seen.size;
   }
   fs.writeFileSync(FILE, JSON.stringify(list, null, 2) + '\n');
   console.log(`linked ${linked}/${list.length} digimon, ${edges} evolution edges`);

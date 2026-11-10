@@ -231,7 +231,30 @@ const gain = (fx, scale) => fx ? Object.fromEntries(Object.entries(fx).map(([k, 
 const bondOf = n => (J && J.bonds[n]) || 0;
 const bondTier = v => { let name = JD.bond.tiers[0][1]; for (const [min, nm] of JD.bond.tiers) if (v >= min) name = nm; return name; };
 const bondChip = b => b && b.d ? `<i class="t-bond${b.d < 0 ? ' neg' : ''}">♥ ${esc(b.mon)} ${b.d > 0 ? '+' : ''}${b.d}</i>` : '';
-const jogPair = () => (J && !J.special && !J.jogressed) ? JD.jogress.find(j => j.a === J.form) : null;
+// 지금 모습의 조그레스 짝: 진화 데이터에서 '짝과 함께' 진화하는 줄 (결과가 지금 단계 이상 · 한 단계 위까지, 짝과 결과 모두 그림이 있을 때).
+// 여러 개면 jogress 표(대표 조합) → 대표 진화 → 운명적으로 하나. 같은 모습이면 언제나 같은 짝이에요
+const jogCache = new Map();
+function jogPair(){
+  if (!J || J.special) return null;
+  const key = J.dg.en + '|' + J.form;
+  if (jogCache.has(key)) return jogCache.get(key);
+  const fixed = JD.jogress.find(j => j.a === J.form);
+  let pick = fixed ? { ...fixed, src: evoSrc(J.form, fixed.result) } : null;
+  const d = window.digiData && window.digiData(J.form);
+  if (!pick && d) {
+    const here = Math.min(J.stage, 3), opts = [];
+    for (const e of d.evolvesTo) {
+      const [n, main, src, , w] = e, rs = stageOfMon(n);
+      if (!w || !w.length || rs === null || rs < here || rs > J.stage + 1 || /(X항체)/.test(n) || !window.digiImage(n)) continue;
+      const mates = w.filter(m => window.digiImage(m) && stageOfMon(m) !== null);
+      if (mates.length) opts.push({ a: J.form, b: mates[hash(key + n) % mates.length], result: n, stage: rs, main, src });
+    }
+    opts.sort((x, y) => y.main - x.main);
+    const top = opts.filter(o => o.main === opts[0]?.main);
+    pick = top.length ? top[hash(key) % top.length] : null;
+  }
+  jogCache.set(key, pick); return pick;
+}
 // 선택지 행동에 따른 친밀도 변화: 만나기만 해도 조금, 도우면 크게, 몰아내거나 흡수하면 내려가요
 function actBond(fx){ let d = JD.bond.meet; for (const [k, v] of Object.entries(fx || {})) d += (JD.bond.act[k] || 0) * v / 2; return Math.round(d); }
 function addBond(mon, d){
@@ -323,7 +346,7 @@ async function stepEvent(region){
   if (r() < rate('rare')) { const ev = pickFrom(JD.rares); return simpleEvent(ev, 'rare', net, monFor(ev, mons)); }
   // 5) 디지멘탈 캡슐 발견 (성장기 · 성숙기)
   // 지금 모습이 그 디지멘탈로 아머진화한다는 근거(Wikimon 진화 후 목록)가 있을 때만 나와요
-  const armors = J.special || J.capsuled || J.stage > 1 ? [] : JD.digimentals.filter(d => d.armor !== J.form && evolvesInto(J.form, d.armor) && (!d.rare || r() < .15));
+  const armors = J.special || J.capsuled || J.stage > 1 ? [] : armorEdges().filter(d => !d.rare || r() < .15);
   if (armors.length && r() < rate('capsule')) {
     const dm = pickFrom(armors);
     mark('luck'); log(`${net}에서 빛나는 「${dm.name}의 디지멘탈」 캡슐을 발견했어요.`, 'luck');
@@ -441,6 +464,8 @@ function wantAttr(){
 }
 // 다음 단계 후보: 정통 루트 하나이거나, 성향 계열에서 속성이 맞는 여러 후보. 진화할 때 이 중 하나가 무작위로 나와요
 // from 이 to 로 진화한다는 근거가 있는지
+// 진화 후 목록의 한 줄: [이름, 대표 1/0, 근거, (있으면) 혼자 진화 1/0, 조그레스 짝 이름[], 디지멘탈]
+const soloEdge = e => e.length < 4 || e[3] === 1;
 const evoEdge = (from, to) => { const d = window.digiData && window.digiData(from), t = window.digiData && window.digiData(to); return d && t ? d.evolvesTo.find(e => e[0] === t.name) || null : null; };
 const evolvesInto = (from, to) => !!evoEdge(from, to);
 const evoSrc = (from, to) => (evoEdge(from, to) || [])[2] || '';
@@ -450,7 +475,7 @@ function nextForms(k){
   const d = window.digiData && window.digiData(J.form); if (!d) return [];
   const seen = new Set();
   return d.evolvesTo.filter(([n]) => { const lv = (window.digiData(n) || {}).level || '';
-    if (seen.has(n) || n === d.name || /아머체|하이브리드체/.test(lv) || /(X항체)/.test(n) || stageOfMon(n) !== k + 1 || !window.digiImage(n)) return false;
+    if (seen.has(n) || n === d.name || !soloEdge(d.evolvesTo.find(e => e[0] === n)) || /아머체|하이브리드체/.test(lv) || /(X항체)/.test(n) || stageOfMon(n) !== k + 1 || !window.digiImage(n)) return false;
     seen.add(n); return true; }).map(([n, main, src]) => ({ n, main: !!main, src }));
 }
 // 후보가 어느 성향에 어울리는지: 아래 branches 표에 있으면 그 성향, 아니면 도감의 유형·속성으로
@@ -491,6 +516,7 @@ function decideEvolution(k){
   return c.length ? c[Math.floor(Math.random() * c.length)] : null;
 }
 function applyEvolution(evo){
+  J.lastEvoAt = J.exp;
   J.form = evo.name; J.stage = evo.stage; J.label = evo.label || evo.special || stageLabel(evo.stage);
   if (evo.branch) J.branch = evo.branch;
   if (evo.special) J.special = evo.special;
@@ -511,9 +537,56 @@ const statTop = () => Math.max(...TRAITS.map(t => J.traits[t]));
 const statSum = () => TRAITS.reduce((m, t) => m + J.traits[t], 0);
 const evoReady = need => J.exp >= need.steps && statTop() >= need.top && statSum() >= need.total;
 async function maybeEvolve(){
-  if (J.special) return;
-  const k = J.stage, need = JD.evolveNeed[k];
-  if (need && evoReady(need) && J.cond >= JD.cond.evolveMin) { const evo = decideEvolution(k); if (evo) await playEvolution(evo); }
+  const k = J.stage, need = !J.special && JD.evolveNeed[k];
+  if (need && evoReady(need) && J.cond >= JD.cond.evolveMin) { const evo = decideEvolution(k); if (evo) { await playEvolution(evo); return; } }
+  // 같은 단계 안에서 이어지는 진화 (모드 체인지 · 암흑진화 · 그 밖의 근거 있는 진화)
+  const lat = lateralEvolution();
+  if (lat) await playEvolution(lat, lat.kind);
+}
+/* ---------- 캡슐: 지금 모습에서 아머체로 진화하는 근거가 있는 줄 (디지멘탈은 데이터에 적힌 것, 없으면 jogress 표의 이름으로) ---------- */
+function armorEdges(){
+  const d = window.digiData && window.digiData(J.form); if (!d) return [];
+  const out = [], seen = new Set();
+  for (const e of d.evolvesTo) {
+    const [n, , src] = e, t = window.digiData(n);
+    if (!t || !/아머체/.test(t.level) || seen.has(n) || !window.digiImage(n)) continue;
+    const known = JD.digimentals.find(x => x.armor === n), name = e[5] || (known && known.name) || '고대';
+    const def = JD.digimentals.find(x => x.name === name) || {};
+    seen.add(n); out.push({ name, trait: def.trait || traitOfEvo(n, 1), armor: n, rare: !!def.rare, src });
+  }
+  return out;
+}
+/* ---------- 같은 단계 안의 진화 ----------
+   진화 데이터에 같은 단계(성숙기 → 성숙기, 궁극체 → 궁극체 …)로 이어지는 근거가 있으면, 성향이 충분히 쌓였을 때 그 모습으로 진화해요.
+   - 이름이 이어지면(듀크몬 → 듀크몬: 크림슨 모드) '모드 체인지', 어두운 모습이면 '암흑진화'(어둠 성향이 높아야 해요)
+   - 이미 거쳐 온 모습으로는 돌아가지 않아요. 진화한 뒤 lateral.gap 걸음이 지나야 해요
+   - 숨겨진 구역의 특별 진화를 한 뒤에도 일어나요 */
+const DARK_FORM = /다크|블랙|흑\)|\(흑|폴다운|\(악\)|스컬|배드|매드|카오스|즈왈트|데스|타락|베노|디아블로|바이스|에빌|볼토|오그도/;
+const dbAttr = n => DB_ATTR[((window.digiData && window.digiData(n)) || {}).attribute] || '';   // 도감 그대로의 속성 (바이러스종이 아니던 모습이 바이러스종이 되면 암흑진화)
+const baseName = n => n.split(/[:(（]/)[0].trim();
+function lateralForms(){
+  const d = window.digiData && window.digiData(J.form); if (!d) return [];
+  const k = stageOfMon(d.name); if (k === null) return [];
+  const been = new Set(J.route.map(r => (window.digiData(r.form) || {}).name || r.form)), isX = /(X항체)/.test(d.name);
+  return d.evolvesTo.filter(e => { const [n] = e, t = window.digiData(n);
+    return t && soloEdge(e) && n !== d.name && !been.has(n) && stageOfMon(n) === k && !/아머체|하이브리드체/.test(t.level)
+      && /(X항체)/.test(n) === isX && window.digiImage(n); })
+    .map(([n, main, src]) => ({ n, main: !!main, src, dark: DARK_FORM.test(n) || (dbAttr(n) === 'vir' && dbAttr(d.name) !== 'vir') }));
+}
+function lateralEvolution(){
+  const L = JD.lateral, k = Math.min(J.stage, 3), need = L.need[k];
+  if (!need || J.exp - (J.lastEvoAt || 0) < L.gap || J.cond < JD.cond.evolveMin) return null;
+  if (statTop() < need.top || statSum() < need.total || Math.random() > L.chance[k]) return null;
+  const t = J.traits, top = [...TRAITS].sort((a, b) => t[b] - t[a])[0], darkOk = top === 'dark' || t.dark >= statSum() * L.darkShare;
+  let list = lateralForms().filter(e => e.dark ? darkOk : top !== 'dark');
+  if (!list.length) return null;
+  const fit = list.filter(e => e.dark ? top === 'dark' : traitOfEvo(e.n, k) === top); if (fit.length) list = fit;
+  const mains = list.filter(e => e.main); if (mains.length) list = mains;
+  const e = list[Math.floor(Math.random() * list.length)];
+  const mode = baseName(e.n) === baseName((window.digiData(J.form) || {}).name || J.form);
+  const path = e.dark ? '암흑진화' : mode ? '모드 체인지' : '이어진 진화';
+  return { name: e.n, stage: J.stage, label: J.special ? J.label : `${stageLabel(J.stage)} · ${path}`, path, src: e.src, attr: attrOf(e.n),
+    kind: e.dark ? 'DARK EVOLUTION' : mode ? 'MODE CHANGE' : 'EVOLUTION', keepSpecial: true };
 }
 
 /* ---------- hidden zones: conditions are never shown on screen ---------- */
@@ -540,13 +613,19 @@ function checkUnlocks(){
 function specialEvolution(d){
   if (!d) return null;
   // 타락 (어비스의 fall 표): 천사가 어둠에 물들어 다시 한 번 진화해요
-  const fallen = d.fall && d.fall[J.form];
+  // 표에 없어도, 지금 모습에서 같은 단계의 어두운 모습으로 진화하는 근거가 있으면 그 모습으로 타락해요
+  const darkLat = d.fall ? lateralForms().filter(e => e.dark) : [];
+  const fallen = d.fall && (d.fall[J.form] || (darkLat.find(e => e.main) || darkLat[0] || {}).n);
   if (fallen) return { name: fallen, stage: 4, special: '타천사', path: '심연으로 타락', sub: 'FALL DOWN', src: evoSrc(J.form, fallen) };
   // X항체: 이미 특별 진화한 모습도 X항체를 받아들일 수 있어요 (도감에 그 X항체 모습이 있을 때만, 한 번만)
   if (J.special && d.suffix === 'X') {
     if (/X$/.test(J.form) || J.special === d.special) return null;
     const x = window.digiData && window.digiData(J.form + 'X');
-    return x && /\(X항체\)$/.test(x.name) ? { name: J.form + 'X', stage: 4, special: d.special, path: d.path, sub: d.sub, src: evoSrc(J.form, J.form + 'X') } : null;
+    if (x && /\(X항체\)$/.test(x.name)) return { name: J.form + 'X', stage: 4, special: d.special, path: d.path, sub: d.sub, src: evoSrc(J.form, J.form + 'X') };
+    // 이름이 다른 X항체로 진화하는 근거가 있으면 그쪽으로 (같은 단계 · 그림 있음)
+    const cur = window.digiData && window.digiData(J.form), xs = cur ? cur.evolvesTo.filter(e => /\(X항체\)$/.test(e[0]) && soloEdge(e) && stageOfMon(e[0]) === stageOfMon(cur.name) && window.digiImage(e[0])) : [];
+    const xe = xs.find(e => e[1]) || xs[0];
+    return xe ? { name: xe[0], stage: 4, special: d.special, path: d.path, sub: d.sub, src: xe[2] } : null;
   }
   if (J.special) return null;
   const en = J.dg.en, ult = J.stage >= 3 ? J.form : ([...J.dg.line].reverse().find(n => n && n !== '?') || J.form);
@@ -699,10 +778,10 @@ async function choose(opt){
   if (opt.kind === 'jogress') {
     J.jogressed = true; J.jogPartner = opt.jg.b;
     const st = Math.max(J.stage, opt.jg.stage);
-    await playEvolution({ name: opt.jg.result, stage: st, label: `${stageLabel(st)} · 조그레스`, path: `조그레스 진화 (${J.form} + ${opt.jg.b})`, partner: opt.jg.b, src: evoSrc(J.form, opt.jg.result) }, 'JOGRESS EVOLUTION');
+    await playEvolution({ name: opt.jg.result, stage: st, label: `${stageLabel(st)} · 조그레스`, path: `조그레스 진화 (${J.form} + ${opt.jg.b})`, partner: opt.jg.b, src: opt.jg.src || evoSrc(J.form, opt.jg.result) }, 'JOGRESS EVOLUTION');
   } else if (opt.kind === 'capsule') {
     J.capsuled = true;
-    await playEvolution({ name: opt.dm.armor, stage: 1, label: '아머체', path: `캡슐진화 · ${opt.dm.name}의 디지멘탈`, src: evoSrc(J.form, opt.dm.armor) }, 'CAPSULE EVOLUTION');
+    await playEvolution({ name: opt.dm.armor, stage: 1, label: '아머체', path: `캡슐진화 · ${opt.dm.name}의 디지멘탈`, src: opt.dm.src }, 'CAPSULE EVOLUTION');
   }
 }
 
@@ -852,7 +931,7 @@ netc.addEventListener('pointermove', e => { if (J && !J.busy && card.hidden && !
 netc.addEventListener('pointerleave', () => { NET.hover = -1; });
 netc.addEventListener('click', e => { if (J && !J.busy && !NET.pinching) travel(NET.regionAt(e.clientX, e.clientY)); });
 // 개발용: 주소 끝에 #debug를 붙이면 콘솔에서 __digi.travel(구역번호)로 이동을, __digi.evolve({name, stage, label, partner}, 'JOGRESS EVOLUTION')로 진화 연출을 시험할 수 있어요
-if (location.hash === '#debug') window.__digi = { map: journeyMap, bond: (n, v) => { J.bonds[n] = v; renderJourney(); }, travel, evolve: playEvolution, candidates: k => evoCandidates(k ?? J.stage), render: () => renderJourney(), net: NET, get journey(){ return J; } };
+if (location.hash === '#debug') window.__digi = { map: journeyMap, bond: (n, v) => { J.bonds[n] = v; renderJourney(); }, travel, evolve: playEvolution, candidates: k => evoCandidates(k ?? J.stage), lateral: () => lateralForms(), latEvo: () => lateralEvolution(), jog: () => jogPair(), armors: () => armorEdges(), special: name => specialEvolution(secretDef(name)), render: () => renderJourney(), net: NET, get journey(){ return J; } };
 $('jEnd').addEventListener('click', () => showLog());
 $('jFocus').addEventListener('click', e => {
   const b = e.target.closest('[data-f]'); if (!b || !J || b.dataset.f === J.focus) return;
