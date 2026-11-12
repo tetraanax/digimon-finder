@@ -49,7 +49,9 @@ window.JOURNEY = {
     { region: '태양계 네트워크', special: '초궁극체', sub: 'SUPER ULTIMATE', path: '태양계의 선택',
       rule: { trait: { courage: 320, power: 220 } },
       forms: { Agumon: '오메가몬 - 머시풀 모드', Gabumon: '오메가몬 - 머시풀 모드', Veemon: '황제드라몬 - 팔라딘 모드', Guilmon: '듀크몬 - 크림슨 모드', Dorumon: '알파몬 - 왕룡검' },
-      suffix: ' 솔라 모드' },
+      // 정해진 모습이 없으면 실제로 있는 '한계를 넘은 모습'(버스트 · 블래스트 모드 등) 중에서 — 지금 모습에서 이어지는 근거가 있으면 그쪽
+      pool: ['샤인그레이몬: 버스트 모드', '미라쥬가오가몬: 버스트 모드', '로제몬: 버스트 모드', '레이브몬: 버스트 모드',
+        '이랑몬: 블래스트 모드', '베르제브몬: 블래스트 모드', '카오스몬: 발두르 암', '얼티메이트카오스몬'] },
     { region: '이그드라실 코어', special: '로열나이츠', sub: 'ROYAL KNIGHTS', path: '세계수의 선택',
       rule: { trait: { courage: 260, friend: 260, wisdom: 160 } },
       forms: { Agumon: '오메가몬', Gabumon: '오메가몬', Guilmon: '듀크몬', Dorumon: '알파몬', Veemon: '매그너몬', Dracomon: '슬레이어드라몬' },

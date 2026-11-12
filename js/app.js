@@ -203,11 +203,10 @@ const fxChips = fx => fx ? Object.entries(fx).map(([k, v]) => `<i class="t-${k}"
 const stageLabel = st => st < 0 ? JD.babyNames[Math.max(0, st + 2)] : JD.stageNames[Math.min(st, 3)];
 const needOf = k => k < 0 ? JD.babyNeed[k + 2] : JD.evolveNeed[k];   // 다음 단계로 진화하는 조건 (유아기 · 유년기 포함)
 const picOf = name => window.digiImage(name);
-// 디지몬 설명: 진화형은 js/digi-info.js, 성장기 파트너는 data.js 의 d. 'X'·' 솔라 모드'는 기본 형태 설명에 한 줄 더해요
+// 디지몬 설명: 진화형은 js/digi-info.js, 성장기 파트너는 data.js 의 d. 'X'는 기본 형태 설명에 한 줄 더해요
 function infoOf(name){
   const I = window.DIGI_INFO || {}, rook = name => { const d = window.DIGI.find(x => x.ko === name); return d && d.d; };
   if (I[name] || rook(name)) return I[name] || rook(name);
-  if (/ 솔라 모드$/.test(name)) { const b = infoOf(name.replace(/ 솔라 모드$/, '')); return (b ? b + ' ' : '') + '태양계의 빛을 받아들여 온몸이 태양처럼 빛나는 모습이에요.'; }
   if (/X$/.test(name)) { const b = infoOf(name.slice(0, -1)); return (b ? b + ' ' : '') + 'X항체를 얻어 본래의 힘이 한층 더 깨어난 모습이에요.'; }
   const d = window.digiData && window.digiData(name);
   if (d && d.type) return `${d.type} ${d.level.replace(/(.*)/, '')} 디지몬이에요.${d.attacks && d.attacks.length ? ` 필살기는 「${d.attacks[0]}」.` : ''}`;
