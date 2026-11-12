@@ -118,6 +118,8 @@
     tailmon: [[206, 147]],                             // 머리-꼬리 사이
     silphymon: [[168, 110], [115, 103]],               // 몸-오른팔 사이, 몸-왼쪽 날개 사이
   };
+  // 빛이 번지는 효과가 그려진 그림 (파일 이름)
+  const GLOW = new Set(['chaosmonvaldurarm']);
   function tinted(src, color) {
     const c = document.createElement('canvas'); c.width = src.width; c.height = src.height;
     const g = c.getContext('2d'); g.drawImage(src, 0, 0); g.globalCompositeOperation = 'source-in'; g.fillStyle = color; g.fillRect(0, 0, c.width, c.height);
@@ -158,6 +160,27 @@
               const xx = i % W, yy = (i / W) | 0;
               if (xx > 0) stack.push(i - 1); if (xx < W - 1) stack.push(i + 1);
               if (yy > 0) stack.push(i - W); if (yy < H - 1) stack.push(i + W);
+            }
+          }
+          // 빛이 번지는 그림: 배경에서 이어지는 밝은 빛 부분을 '밝기 → 투명도'로 바꿔서, 어두운 화면에서도 빛이 부드럽게 번져 보이게 해요
+          if (GLOW.has(file)) {
+            // 번지는 빛 = 아주 밝거나(거의 흰색) 노르스름한 밝은 색. 푸르스름한 몸통은 건드리지 않아요
+            const soft = i => { const r = px[i * 4], gg = px[i * 4 + 1], b = px[i * 4 + 2], mn = Math.min(r, gg, b);
+              return mn > 222 || (mn > 105 && (r + gg) / 2 - b > 18 && r > 200); };
+            const seen = new Uint8Array(W * H);
+            for (let i = 0; i < W * H; i++) if (gone[i]) stack.push(i);
+            while (stack.length) {
+              const i = stack.pop();
+              if (seen[i]) continue; seen[i] = 1;
+              if (!gone[i]) {
+                if (!soft(i)) continue;
+                // 흰색에서 멀수록 진하게: 색은 밝은 그대로 두고 투명도만 줘서, 어두운 화면 위에서 빛처럼 보여요
+                const a = Math.max(255 - px[i * 4], 255 - px[i * 4 + 1], 255 - px[i * 4 + 2]) / 255;
+                px[i * 4 + 3] = Math.round(Math.min(1, a * 1.7) * 255); gone[i] = 3;
+              }
+              const x = i % W, y = (i / W) | 0;
+              if (x > 0) stack.push(i - 1); if (x < W - 1) stack.push(i + 1);
+              if (y > 0) stack.push(i - W); if (y < H - 1) stack.push(i + W);
             }
           }
           for (let i = 0; i < W * H; i++) {
