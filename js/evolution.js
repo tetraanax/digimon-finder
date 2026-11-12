@@ -86,7 +86,7 @@
     data:    { title: 'LIMIT BREAK',      hud: ['SCANNING', 'DECOMPILE', 'AMPLIFY', 'LIMIT BREAK', 'RECOMPILE'], mult: 'EXPAND', rain: '125,211,252' },
     holy:    { tint: '#fcd34d', tint2: '#fff7d6', title: 'HOLY ASCENSION', hud: ['SCANNING', 'PURIFY', 'BLESS', 'ASCEND', 'DESCEND'], mult: 'BLESS', rain: '253,230,138', flash: '255,251,234' },
     virus:   { tint: '#f43f5e', tint2: '#a855f7', title: 'SYSTEM CORRUPTED', hud: ['SCANNING', 'INFECT', 'ABSORB', 'OVERFLOW', 'MUTATE'], mult: 'ABSORB', rain: '244,63,94', flash: '255,40,90', bg: '10,2,12' },
-    vaccine: { tint: '#6ee7b7', tint2: '#fde68a', title: 'SANCTIFIED', hud: ['THREAT SCAN', 'SANCTIFY', 'PURIFY', 'HOLY AEGIS', 'DESCEND'], mult: 'PURIFY', rain: '253,236,170', flash: '255,250,228', bg: '3,8,14' },
+    vaccine: { tint: '#f8fafc', tint2: '#fbbf24', title: 'SANCTIFIED', hud: ['THREAT SCAN', 'SANCTIFY', 'PURIFY', 'HOLY AEGIS', 'DESCEND'], mult: 'PURIFY', rain: '248,250,252', flash: '255,252,240', bg: '7,8,16' },
     free:    { tint: '#34d399', title: 'FREE FORM',        hud: ['SCANNING', 'DECOMPILE', 'AMPLIFY', 'LIMIT BREAK', 'RECOMPILE'], mult: 'EXPAND', rain: '167,243,208' },
     capsule: { tint: '#facc15', tint2: '#fde68a', title: 'CAPSULE UNLOCKED', hud: ['SCANNING', 'DECOMPILE', 'AMPLIFY', 'LIMIT BREAK', 'ARMOR LOCK'], mult: 'EXPAND', rain: '253,224,71', flash: '255,247,214' },
     jogress: { tint: '#f472b6', tint2: '#38bdf8', title: 'DNA SYNCHRONIZED', hud: ['SCANNING', 'DNA SPLIT', 'SYNC', 'FUSION', 'RECOMPILE'], mult: 'SYNC', rain: '249,168,212' },
@@ -604,6 +604,32 @@
       g.save(); g.globalAlpha = k; g.strokeStyle = '#fff7d6'; g.lineWidth = 4 * dpr; g.shadowColor = tint; g.shadowBlur = 26 * dpr;
       g.beginPath(); g.ellipse(x, y, w, w * .22, 0, 0, Math.PI * 2); g.stroke();
       g.strokeStyle = tint; g.lineWidth = 1.5 * dpr; g.beginPath(); g.ellipse(x, y, w * 1.14, w * .27, 0, 0, Math.PI * 2); g.stroke();
+      g.restore();
+    }
+
+    // 백신: 엔젤링 — 비스듬히 누운 빛의 고리. 뒤쪽 반은 흐리게, 앞쪽 반은 흰빛으로 또렷하게, 금빛 테두리와 고리를 도는 반짝임
+    function angelRing(x, y, w, k, ph = 0) {
+      if (k <= 0 || w <= 1) return;
+      const h = w * .26, lw = Math.max(2, w * .09);
+      g.save(); g.globalCompositeOperation = 'lighter';
+      const glow = g.createRadialGradient(x, y, 0, x, y, w * 1.5); glow.addColorStop(0, `rgba(${FLASH},.28)`); glow.addColorStop(.6, tint2 + '18'); glow.addColorStop(1, tint2 + '00');
+      g.globalAlpha = clamp(k); g.fillStyle = glow; g.beginPath(); g.ellipse(x, y, w * 1.5, h * 2.6, 0, 0, Math.PI * 2); g.fill();
+      // 고리 자체는 덧칠하지 않고 그려요: 밝은 빛 속에서도 금빛 테가 묻히지 않게
+      g.globalCompositeOperation = 'source-over';
+      g.shadowColor = tint2; g.shadowBlur = w * .35;
+      g.globalAlpha = clamp(k) * .45; g.strokeStyle = tint2; g.lineWidth = lw * 1.6; g.beginPath(); g.ellipse(x, y, w, h, 0, Math.PI, Math.PI * 2); g.stroke();   // 뒤쪽 반
+      g.globalAlpha = clamp(k) * .9; g.shadowBlur = 0; g.lineWidth = lw * 2.3; g.strokeStyle = '#b45309'; g.beginPath(); g.ellipse(x, y, w, h, 0, 0, Math.PI * 2); g.stroke();   // 진한 호박색 바깥 테: 밝은 빛 속에서도 고리 모양이 보여요
+      g.shadowBlur = w * .35;
+      g.globalAlpha = clamp(k); g.lineWidth = lw * 1.7; g.strokeStyle = tint2; g.beginPath(); g.ellipse(x, y, w, h, 0, 0, Math.PI * 2); g.stroke();                  // 금빛 테
+      g.shadowColor = '#ffffff'; g.lineWidth = lw; g.strokeStyle = '#ffffff'; g.beginPath(); g.ellipse(x, y, w, h, 0, 0, Math.PI); g.stroke();                 // 앞쪽 흰 고리
+      g.globalAlpha = clamp(k) * .8; g.lineWidth = lw * .55; g.beginPath(); g.ellipse(x, y, w, h, 0, Math.PI, Math.PI * 2); g.stroke();
+      g.shadowBlur = 0;
+      for (let i = 0; i < 4; i++) {                                            // 고리를 따라 도는 반짝임
+        const a = t * .0016 + ph + i * Math.PI / 2, sx = x + Math.cos(a) * w, sy = y + Math.sin(a) * h, front = Math.sin(a) > 0 ? 1 : .35, s = lw * (1.6 + .8 * Math.sin(t * .01 + i));
+        g.globalAlpha = clamp(k) * front; g.fillStyle = '#ffffff';
+        g.beginPath(); g.moveTo(sx, sy - s * 2); g.lineTo(sx + s * .35, sy); g.lineTo(sx, sy + s * 2); g.lineTo(sx - s * .35, sy); g.closePath(); g.fill();
+        g.beginPath(); g.moveTo(sx - s * 2, sy); g.lineTo(sx, sy + s * .35); g.lineTo(sx + s * 2, sy); g.lineTo(sx, sy - s * .35); g.closePath(); g.fill();
+      }
       g.restore();
     }
 
@@ -1146,6 +1172,11 @@
           if (themeId === 'vaccine') {
             lockOn(cx, cy, partner ? S * 1.5 : S, A0 * prog(t, T.call, T.call + 600) * (1 - prog(t, T.disEnd - 600, T.disEnd + 200)), prog(t, T.call + 300, T.scanEnd));
             firewall(cx, cy, S * .68, A0 * prog(t, T.scanEnd - 400, T.scanEnd + 400) * (1 - prog(t, T.disEnd - 300, T.disEnd + 200)) * .7, prog(t, T.scanEnd - 400, T.dis + 1200));
+            // 엔젤링이 위에서 내려와 머리 위에 자리 잡아요 (분해가 시작되면 위로 떠올라 사라져요)
+            const ak = A0 * prog(t, T.call, T.call + 700) * (1 - prog(t, T.dis + 400, T.disEnd));
+            const drop = (1 - easeOut(prog(t, T.call, T.call + 1100))) * -S * .5 - prog(t, T.dis, T.disEnd) * S * .4;
+            if (partner) { const off = Math.min(W * .24, S * .85); angelRing(cx - off, cy + bob - S * .44 + drop, S * .15, ak); angelRing(cx + off, cy - bob - S * .44 + drop, S * .15, ak, 1); }
+            else angelRing(cx, cy + bob - S * .55 + drop, S * .19, ak);
           }
           const sc = prog(t, T.scan, T.scanEnd);
           if (sc > 0 && sc < 1) {
@@ -1233,6 +1264,10 @@
           const vk = A0 * prog(t, T.amp0 - 600, T.amp0) * (1 - prog(t, T.implode, T.boom));
           firewall(cx, cy, Rbase * 1.15 * implodeK, vk, prog(t, T.amp0 - 600, T.implode - 600));
           antibodies(cx, cy, Rbase * implodeK, vk, Math.round(6 + 34 * ampP));
+          // 구체 위의 커다란 엔젤링: 증폭될수록 커지고 박동마다 빛나며, 응축될 때 구체로 빨려 들어가요
+          const rk = A0 * prog(t, T.amp0 - 800, T.amp0) * (1 - prog(t, T.implode + 300, T.boom));
+          const rw = Rbase * implodeK * (.85 + .25 * ampP) * (1 + .1 * heart), ry = cy - Rbase * implodeK * (1.05 + .1 * ampP) * (1 - prog(t, T.implode, T.boom));
+          angelRing(cx, ry, rw, rk * (.75 + .25 * heart));
           if (t >= T.implode && t < T.boom) { g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = A0 * prog(t, T.implode, T.implode + 200); g.textAlign = 'center'; g.fillStyle = '#ffffff'; g.shadowColor = tint; g.shadowBlur = 20 * dpr; g.font = `${14 * dpr}px Silkscreen, monospace`; g.fillText('FIREWALL LOCKED · INTEGRITY 100%', cx, cy - S * .7); g.restore(); }
         }
         // 속성 효과: 증폭되는 구체 둘레에서 박자마다 거세져요
@@ -1304,7 +1339,7 @@
           g.fillStyle = 'rgba(255,255,255,.15)'; g.fillRect(x0, y0, 200 * dpr, 5 * dpr);
           g.fillStyle = tint; g.fillRect(x0, y0, 200 * dpr * syncP / 100, 5 * dpr);
           if (themeId === 'virus' && (t / 260 | 0) % 2) { g.font = `${13 * dpr}px Silkscreen, monospace`; g.fillStyle = '#ff4d6d'; g.fillText(`WARNING  CORRUPTION ${Math.round(infectK * 100)}%`, x0, y0 + 26 * dpr); }
-          if (themeId === 'vaccine') { g.font = `${13 * dpr}px Silkscreen, monospace`; g.fillStyle = '#86efac'; g.fillText(`SECURE   THREAT 0 · INTEGRITY ${Math.round(60 + 40 * prog(t, T.scan, T.implode))}%`, x0, y0 + 26 * dpr); }
+          if (themeId === 'vaccine') { g.font = `${13 * dpr}px Silkscreen, monospace`; g.fillStyle = tint2; g.fillText(`SECURE   THREAT 0 · INTEGRITY ${Math.round(60 + 40 * prog(t, T.scan, T.implode))}%`, x0, y0 + 26 * dpr); }
           if (inOvf && (t / 140 | 0) % 2) { g.font = `${13 * dpr}px Silkscreen, monospace`; g.fillStyle = '#ff1744'; g.fillText('FATAL  INTEGER OVERFLOW · 0x80000000', x0, y0 + 46 * dpr); }
           g.restore();
         }
@@ -1321,6 +1356,8 @@
             const q = prog(t, T.boom + i * 120, T.boom + 1100 + i * 120), r = M * .9 * easeOut(q), a = (1 - q) * .9 * fadeOut, w = Math.max(1.5, 7 - i * .8);
             if (i % 2) hexRing(cx, cy, r, a, w, i * .2, '#ffffff'); else ring(cx, cy, r, a, w, LV >= 6 ? `hsl(${(i * 52 + t * .2) % 360},95%,70%)` : tint);
           }
+          // 백신: 터지는 순간 엔젤링이 겹겹이 퍼져 나가요
+          if (themeId === 'vaccine') for (let i = 0; i < 3; i++) { const q = prog(t, T.boom + i * 180, T.boom + 1400 + i * 180); if (q > 0 && q < 1) angelRing(cx, cy - M * .05 * i, M * (.15 + .75 * easeOut(q)), (1 - q) * fadeOut, i); }
           if (ELD) for (let i = 0; i < 1 + Math.round(EI * 3); i++) { const q = prog(t, T.boom + 60 + i * 160, T.boom + 1600 + i * 160); if (q > 0 && q < 1) ring(cx, cy, M * (.2 + .9 * EI) * easeOut(q), (1 - q) * fadeOut, (3 + 8 * EI) * (1 - q), ELD.col); }
           g.save(); g.globalCompositeOperation = 'lighter';
           for (const b of burst) {
@@ -1354,7 +1391,10 @@
           const sA = (themeId === 'capsule' ? prog(t, T.slam, T.slam + 140) : prog(t, T.solid, T.slam)) * fadeOut;
           const punch = t >= T.slam ? 1 + .1 * (1 - easeOut(prog(t, T.slam, T.slam + 380))) : 1;
           sprite(B, cx, by, sprS * punch, { a: sA, white: themeId === 'capsule' ? 1 - prog(t, T.slam, T.slam + 500) : 1 - prog(t, T.solid + 300, T.slam + 200), glow: 40 });
-          if (themeId === 'holy' || themeId === 'vaccine') halo(cx, by - sprS * .5, sprS * .2, fadeOut * easeOut(prog(t, T.slam + 300, T.slam + 1000)));
+          if (themeId === 'holy') halo(cx, by - sprS * .5, sprS * .2, fadeOut * easeOut(prog(t, T.slam + 300, T.slam + 1000)));
+          // 백신: 새 모습 머리 위로 엔젤링이 내려와 자리 잡고, 은은하게 맥동해요
+          if (themeId === 'vaccine') { const q = easeOut(prog(t, T.slam + 200, T.slam + 1300));
+            angelRing(cx, by - sprS * (.5 + .35 * (1 - q)), sprS * .28 * (1 + .04 * Math.sin(t / 500)), fadeOut * q); }
           const rp = prog(t, T.slam, T.slam + 1000);
           hexRing(cx, by, S * (.35 + rp * 1.6), (1 - rp) * .9 * fadeOut, 3, rp * .6, '#ffffff');
           ring(cx, by, S * (.3 + rp * 1.1), (1 - rp) * .7 * fadeOut, 2);
