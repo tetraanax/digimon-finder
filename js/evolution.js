@@ -114,7 +114,7 @@
     holydramon: [[102, 183]],                          // 꼬리 사이
     dorumon: [[155, 131]],                             // 꼬리-뿔 사이
     tailmon: [[206, 147]],                             // 머리-꼬리 사이
-    silphymon: [[168, 110]],                           // 몸-팔 사이
+    silphymon: [[168, 110], [115, 103]],               // 몸-오른팔 사이, 몸-왼쪽 날개 사이
   };
   function tinted(src, color) {
     const c = document.createElement('canvas'); c.width = src.width; c.height = src.height;
