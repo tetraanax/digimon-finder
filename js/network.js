@@ -772,7 +772,7 @@
       this.pulses = Array.from({ length: count }, () => { const e = Math.random() * m | 0; return { a: E[e * 2], b: E[e * 2 + 1], t: Math.random(), sp: .25 + Math.random() * .7 }; });
     }
     resize() {
-      this.dpr = Math.min(2, window.devicePixelRatio || 1);
+      this.dpr = Math.min(1.5, window.devicePixelRatio || 1);   // 고해상도 화면에서도 1.5배까지만: 점과 선이 수만 개라 픽셀 수가 곧 속도예요
       this.c.width = Math.max(1, this.c.clientWidth * this.dpr); this.c.height = Math.max(1, this.c.clientHeight * this.dpr);
       // star field the size of the screen; tiled horizontally for parallax
       const W = this.c.width, H = this.c.height, s = document.createElement('canvas'); s.width = W; s.height = H;
@@ -968,6 +968,11 @@
 
     frame(now) {
       if (!this.active) return;
+      // 가만히 둘러보는 중(움직임이 아주 느릴 때)에 한 장 그리는 데 오래 걸리는 기기라면 한 프레임씩 건너뛰어 숨을 돌려요
+      if (this.mode === 'idle' && !this.pinching && (this.drawCost || 0) > 9 && now - (this.userRotT || 0) > 1500 && now - (this.lastDraw || 0) < 28) {
+        this.raf = requestAnimationFrame(this.frame); return;
+      }
+      const drawStart = performance.now(); this.lastDraw = now;
       const G = this.G, g = this.g, W = this.c.width, H = this.c.height, dpr = this.dpr;
       const dt = Math.min(50, now - this.last); this.last = now;
       const tr = this.tr;
@@ -1075,15 +1080,17 @@
 
       g.globalCompositeOperation = 'lighter';
       /* edges, bucketed by color × depth */
-      const E = G.E, buckets = new Array(PALETTE.length * 3);
+      const E = G.E, buckets = new Array(PALETTE.length * 3), MINLEN = [2.2 * dpr, 1.5 * dpr, 1.2 * dpr];
       for (let e = 0; e < E.length; e += 2) {
         const a = E[e], b = E[e + 1];
         let x0, y0, x1, y1;
         if (PZ[a] > 30 && PZ[b] > 30) { x0 = PX[a]; y0 = PY[a]; x1 = PX[b]; y1 = PY[b]; }
         else { const q = seg(a, b); if (!q) continue; [x0, y0, x1, y1] = q; }
         if ((x0 < 0 && x1 < 0) || (x0 > W && x1 > W) || (y0 < 0 && y1 < 0) || (y0 > H && y1 > H)) continue;
-        if (Math.abs(x1 - x0) + Math.abs(y1 - y0) < 1.2 * dpr) continue;   // 점 하나 크기보다 짧은 선은 점이 대신 보여 줘요
-        const zz = Math.max(30, (PZ[a] + PZ[b]) * .5), lv = zz < 1200 * DK ? 2 : zz < 2800 * DK ? 1 : 0, key = G.C[a] * 3 + lv;
+        const zz = (PZ[a] + PZ[b]) * .5, lv = zz < 1200 * DK ? 2 : zz < 2800 * DK ? 1 : 0;
+        // 점 하나 크기보다 짧은 선은 점이 대신 보여 줘요 (멀고 흐린 선일수록 조금 더 길어야 그려요)
+        const L = (x1 > x0 ? x1 - x0 : x0 - x1) + (y1 > y0 ? y1 - y0 : y0 - y1); if (L < MINLEN[lv]) continue;
+        const key = G.C[a] * 3 + lv;
         const p = buckets[key] || (buckets[key] = new Path2D()); p.moveTo(x0, y0); p.lineTo(x1, y1);
       }
       // crisper links: brighter, and thicker the closer they are
@@ -1124,20 +1131,28 @@
         this.dotG = this.dotC.getContext('2d'); this.dotI = this.dotG.createImageData(W, H); this.dotB = new Uint32Array(this.dotI.data.buffer);
         this.rgb = PALETTE.map(h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)]);
       }
-      const DB = this.dotB, RGB = this.rgb; DB.fill(0);
+      if (!this.rgbP) this.rgbP = new Uint32Array(this.rgb.map(c => (c[2] << 16 | c[1] << 8 | c[0]) >>> 0));
+      const DB = this.dotB, RGBP = this.rgbP, GK = G.K, GC = G.C, GS = G.S, LUX = this.lux, VIS = this.visited; DB.fill(0);
+      // 점 찍기: 둥근 값 계산을 정수 연산으로 줄이고, 1픽셀짜리는 바로 써요
       const dot = (ci, a, x, y, d) => {
-        const n0 = Math.max(1, Math.min(5, Math.round(d))), x0 = Math.round(x), y0 = Math.round(y);
+        let n0 = (d + .5) | 0; if (n0 < 1) n0 = 1; else if (n0 > 5) n0 = 5;
+        const x0 = (x + .5) | 0, y0 = (y + .5) | 0;
         if (x0 < 0 || y0 < 0 || x0 + n0 > W || y0 + n0 > H) return;
-        const c = RGB[ci], A = Math.min(255, a * 255 | 0), v = (A << 24 | c[2] << 16 | c[1] << 8 | c[0]) >>> 0;
+        let A = (a * 255) | 0; if (A > 255) A = 255;
+        const v = ((A << 24) | RGBP[ci]) >>> 0;
+        if (n0 === 1) { const o = y0 * W + x0; if ((DB[o] >>> 24) < A) DB[o] = v; return; }
         for (let yy = 0; yy < n0; yy++) { let o = (y0 + yy) * W + x0; for (let xx = 0; xx < n0; xx++, o++) if ((DB[o] >>> 24) < A) DB[o] = v; }
       };
+      const dA = 1800 * DK, xMin = -60, xMax = W + 60, yMin = -60, yMax = H + 60;
       for (let i = 0; i < n; i++) {
-        if (!onScreen(i)) continue;
-        const kind = G.K[i], s = F / PZ[i], x = PX[i], y = PY[i], col = PALETTE[G.C[i]];
-        const depthA = Math.max(.5, Math.min(1, 1800 * DK / PZ[i]));
-        const vis = this.visited.has(i);
-        if (kind === DUST) { dot(G.C[i], .55 * depthA, x, y, Math.max(1, G.S[i] * s * 1.6)); continue; }
-        const lx = this.lux[i];
+        const z = PZ[i]; if (z <= 30) continue;
+        const x = PX[i]; if (x < xMin || x > xMax) continue;
+        const y = PY[i]; if (y < yMin || y > yMax) continue;
+        const kind = GK[i], s = F / z;
+        let depthA = dA / z; if (depthA > 1) depthA = 1; else if (depthA < .5) depthA = .5;
+        if (kind === DUST) { const d = GS[i] * s * 1.6; dot(GC[i], .55 * depthA, x, y, d > 1 ? d : 1); continue; }
+        const vis = VIS.size > 0 && VIS.has(i), col = PALETTE[GC[i]];
+        const lx = LUX[i];
         if (kind === BEAD && !vis) { const tw = .55 + .45 * Math.sin(now * (lx ? .006 : .004) + i * 1.7), d = Math.max((lx ? 1.6 : 1.2) * dpr, G.S[i] * s * (lx ? 2.8 : 2.2));
           dot(G.C[i], Math.min(1, depthA * tw * (lx ? 1.5 : 1)), x - d * .5, y - d * .5, d);
           if (lx && tw > .93 && PZ[i] < 5000) { const gs = d * 3.2; g.globalAlpha = .55 * depthA; g.drawImage(this.glow[G.C[i]], x - gs, y - gs, gs * 2, gs * 2); }
@@ -1278,6 +1293,7 @@
             g.fillText(here2 ? `${rs.reg.en} · YOU ARE HERE` : `${rs.reg.en} · ${rs.reg.nodes.length} NODES`, rs.x, rs.y + 18 * dpr); } }
       }
       g.globalAlpha = 1;
+      this.drawCost = (this.drawCost || 0) * .9 + (performance.now() - drawStart) * .1;
       this.raf = requestAnimationFrame(this.frame);
     }
   }

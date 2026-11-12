@@ -107,6 +107,12 @@
 
   /* ---------- 그림 준비: 흰 배경을 오려 내고, 실루엣과 픽셀 표본(입자 자리)을 만들어요 ---------- */
   const cache = new Map();
+  // 안쪽 흰 배경 자리 (320×320 그림 기준 좌표): 파일 이름 → 지울 곳들
+  const HOLES = {
+    dukemon: [[196, 108], [178, 154], [158, 4]],       // 망토-방패 사이, 팔-다리 사이, 투구 깃털-망토 사이
+    paildramon: [[128, 133], [80, 198], [62, 211]],    // 손톱 사이
+    holydramon: [[102, 183]],                          // 꼬리 사이
+  };
   function tinted(src, color) {
     const c = document.createElement('canvas'); c.width = src.width; c.height = src.height;
     const g = c.getContext('2d'); g.drawImage(src, 0, 0); g.globalCompositeOperation = 'source-in'; g.fillStyle = color; g.fillRect(0, 0, c.width, c.height);
@@ -134,6 +140,20 @@
             const x = i % W, y = (i / W) | 0;
             if (x > 0) stack.push(i - 1); if (x < W - 1) stack.push(i + 1);
             if (y > 0) stack.push(i - W); if (y < H - 1) stack.push(i + W);
+          }
+          // 그림 안쪽에 갇힌 흰 배경(날개·꼬리·팔 사이): 순백 몸통과 색으로는 구별되지 않아서, 그림마다 직접 찍어 둔 자리만 지워요
+          const file = (src.split('/').pop() || '').replace(/\.\w+$/, '');
+          for (const [hx, hy] of HOLES[file] || []) {
+            const x = Math.round(hx * W / 320), y = Math.round(hy * H / 320); if (x < 0 || y < 0 || x >= W || y >= H) continue;
+            stack.push(y * W + x);
+            while (stack.length) {
+              const i = stack.pop();
+              if (gone[i] || !light(i)) continue;
+              gone[i] = 1; px[i * 4 + 3] = 0;
+              const xx = i % W, yy = (i / W) | 0;
+              if (xx > 0) stack.push(i - 1); if (xx < W - 1) stack.push(i + 1);
+              if (yy > 0) stack.push(i - W); if (yy < H - 1) stack.push(i + W);
+            }
           }
           for (let i = 0; i < W * H; i++) {
             if (gone[i]) continue;
@@ -416,13 +436,24 @@
       g.restore();
     }
     // 회전하는 빛살 (결과 화면 뒤)
+    // 결과 화면 뒤의 빛: 은은한 원형 빛 + 천천히 도는 점선 동심원 + 위로 떠오르는 빛줄기 (방사형 부채꼴 줄기는 쓰지 않아요)
     function godRays(x, y, len, k, rot, n) {
       if (k <= 0) return;
-      g.save(); g.globalCompositeOperation = 'lighter'; g.translate(x, y); g.rotate(rot);
-      const gr = g.createRadialGradient(0, 0, 0, 0, 0, len); gr.addColorStop(0, tint2); gr.addColorStop(.25, tint + 'aa'); gr.addColorStop(1, tint + '00');
-      g.fillStyle = gr;
-      for (let i = 0; i < n; i++) { const a = i / n * Math.PI * 2, w = Math.PI / n * (i % 2 ? .35 : .6); g.globalAlpha = k * (i % 2 ? .6 : 1);
-        g.beginPath(); g.moveTo(0, 0); g.arc(0, 0, len, a - w, a + w); g.closePath(); g.fill(); }
+      g.save(); g.globalCompositeOperation = 'lighter';
+      const gr = g.createRadialGradient(x, y, 0, x, y, len * .8); gr.addColorStop(0, tint2); gr.addColorStop(.3, tint + '55'); gr.addColorStop(1, tint + '00');
+      g.globalAlpha = k * .9; g.fillStyle = gr; g.beginPath(); g.arc(x, y, len * .8, 0, Math.PI * 2); g.fill();
+      g.strokeStyle = tint; g.lineCap = 'round';
+      const rings = Math.max(3, Math.round(n / 5));
+      for (let i = 0; i < rings; i++) {
+        const r = len * (.22 + i * .14), segs = 10 + i * 4, dir = i % 2 ? -1 : 1;
+        g.globalAlpha = k * (1 - i / rings) * 1.4; g.lineWidth = (2.2 - i * .3) * dpr;
+        for (let s = 0; s < segs; s++) { const a = rot * dir * (6 - i) + s / segs * Math.PI * 2; g.beginPath(); g.arc(x, y, r, a, a + Math.PI / segs * .9); g.stroke(); }
+      }
+      for (let i = 0; i < n; i++) {
+        const q = (t * (.00012 + rndS(i, 151) * .00012) + rndS(i, 152)) % 1, px = x + (rndS(i, 153) - .5) * len * 1.1, py = y + len * .35 - q * len * .9, L = len * (.08 + .1 * rndS(i, 154));
+        const lg = g.createLinearGradient(px, py, px, py + L); lg.addColorStop(0, tint2); lg.addColorStop(1, tint + '00');
+        g.globalAlpha = k * Math.sin(q * Math.PI) * 1.6; g.fillStyle = lg; g.fillRect(px - 1.5 * dpr, py, 3 * dpr, L);
+      }
       g.restore();
     }
     // 반짝이는 별가루 (4단계 결과 화면)
@@ -869,11 +900,15 @@
           g.stroke();
         }
       } else if (EL === 'light') {
-        const nr = 6 + Math.round(18 * I), len = S * (.8 + 2.2 * I);
-        g.save(); g.translate(x, y); g.rotate(t * .00015);
-        const rg2 = g.createRadialGradient(0, 0, 0, 0, 0, len); rg2.addColorStop(0, '#ffffff'); rg2.addColorStop(.3, c1 + '88'); rg2.addColorStop(1, c1 + '00'); g.fillStyle = rg2;
-        for (let i = 0; i < nr; i++) { const a = i / nr * Math.PI * 2, w2 = Math.PI / nr * .35; g.globalAlpha = k * .35; g.beginPath(); g.moveTo(0, 0); g.arc(0, 0, len, a - w2, a + w2); g.closePath(); g.fill(); }
-        g.restore();
+        // 빛: 부드러운 빛무리와 위에서 내려오는 빛기둥 (방사형 줄기는 쓰지 않아요)
+        const len = S * (.8 + 2.2 * I), np = 2 + Math.round(6 * I);
+        const rg2 = g.createRadialGradient(x, y, 0, x, y, len * .7); rg2.addColorStop(0, '#ffffff'); rg2.addColorStop(.3, c1 + '66'); rg2.addColorStop(1, c1 + '00');
+        g.globalAlpha = k * .5; g.fillStyle = rg2; g.beginPath(); g.arc(x, y, len * .7, 0, Math.PI * 2); g.fill();
+        for (let i = 0; i < np; i++) {
+          const px = x + (rndS(i, 115) - .5) * spread * 1.2 + Math.sin(t / 1400 + i) * 12 * dpr, w2 = S * (.04 + .08 * rndS(i, 116)) * (.7 + I);
+          const pg = g.createLinearGradient(0, 0, 0, by); pg.addColorStop(0, '#ffffff00'); pg.addColorStop(.4, c1 + '55'); pg.addColorStop(1, c1 + '00');
+          g.globalAlpha = k * (.4 + .3 * Math.sin(t / 600 + i * 2)); g.fillStyle = pg; g.fillRect(px - w2 / 2, 0, w2, by);
+        }
         for (let i = 0; i < N; i++) { const q = (t * (.00015 + rndS(i, 111) * .0002) + rndS(i, 112)) % 1, px = x + (rndS(i, 113) - .5) * spread * 1.3, py = lerp(by, by - S * (.8 + 1.4 * I), q), s = (6 + rndS(i, 114) * 10) * dpr * (.7 + I * .6);
           g.globalAlpha = k * Math.sin(q * Math.PI); g.drawImage(glowDot(i % 2 ? c1 : '#fff7d6'), px - s, py - s, s * 2, s * 2); }
         for (let j = 0; j < 1 + Math.round(2 * I); j++) { const q = (t * .0003 + j / 3) % 1; ring(x, y, S * (.4 + q * (1 + I)), k * (1 - q) * .6, 2, c1); }
