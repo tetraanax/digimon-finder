@@ -112,6 +112,7 @@
     dukemon: [[196, 108], [178, 154], [158, 4]],       // 망토-방패 사이, 팔-다리 사이, 투구 깃털-망토 사이
     paildramon: [[128, 133], [80, 198], [62, 211]],    // 손톱 사이
     holydramon: [[102, 183]],                          // 꼬리 사이
+    dorumon: [[155, 131]],                             // 꼬리-뿔 사이
   };
   function tinted(src, color) {
     const c = document.createElement('canvas'); c.width = src.width; c.height = src.height;
