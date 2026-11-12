@@ -77,7 +77,8 @@
      holy    — 백신종 / 로열나이츠 · 사성수 · 올림포스: 위에서 내려오는 빛기둥, 빛의 깃털, 성스러운 문양 원, 머리 위 광륜, 입자가 하늘에서 내려와요
      virus   — 바이러스종 / 칠대마왕: 가장자리에서 자라는 검은 촉수, 몸을 갉아먹는 오염 블록, 가운데의 검은 핵이 데이터를 흡수, 화면 찢김
      vaccine — 백신종: 위협 조준경이 몸을 붙잡아 격리하고, 정화 파동이 화면을 훑고, 육각 방화벽 돔이 칸칸이 켜지며 구체를 감싸요.
-               사방에서 십자 항체가 날아와 꽂히고, 결과 화면에는 커다란 방패 문장이 떠요 (SYSTEM SECURED)
+               하늘에서 빛기둥과 빛의 깃털이 내려오고, 사방에서 금빛 십자 항체가 날아와 꽂혀요. 결과 화면에는 후광과 빛의 날개를 두른
+               금빛 방패 문장과 성스러운 문양 원, 머리 위 광륜이 떠요 (SANCTIFIED)
      free    — 프리종: 무지갯빛 입자
      capsule — 캡슐(아머) 진화: 궤도를 도는 캡슐 판, 조각들이 날아와 캡슐 껍질로 맞물렸다가 깨지며 등장
      jogress — 조그레스: 두 디지몬의 데이터가 분홍 · 하늘색 이중 나선으로 꼬이다 하나로 합쳐져요 */
@@ -85,7 +86,7 @@
     data:    { title: 'LIMIT BREAK',      hud: ['SCANNING', 'DECOMPILE', 'AMPLIFY', 'LIMIT BREAK', 'RECOMPILE'], mult: 'EXPAND', rain: '125,211,252' },
     holy:    { tint: '#fcd34d', tint2: '#fff7d6', title: 'HOLY ASCENSION', hud: ['SCANNING', 'PURIFY', 'BLESS', 'ASCEND', 'DESCEND'], mult: 'BLESS', rain: '253,230,138', flash: '255,251,234' },
     virus:   { tint: '#f43f5e', tint2: '#a855f7', title: 'SYSTEM CORRUPTED', hud: ['SCANNING', 'INFECT', 'ABSORB', 'OVERFLOW', 'MUTATE'], mult: 'ABSORB', rain: '244,63,94', flash: '255,40,90', bg: '10,2,12' },
-    vaccine: { tint: '#4ade80', tint2: '#e0f2fe', title: 'SYSTEM SECURED', hud: ['THREAT SCAN', 'QUARANTINE', 'IMMUNIZE', 'FIREWALL', 'DEPLOY'], mult: 'IMMUNIZE', rain: '134,239,172', flash: '236,255,245', bg: '2,10,8' },
+    vaccine: { tint: '#6ee7b7', tint2: '#fde68a', title: 'SANCTIFIED', hud: ['THREAT SCAN', 'SANCTIFY', 'PURIFY', 'HOLY AEGIS', 'DESCEND'], mult: 'PURIFY', rain: '253,236,170', flash: '255,250,228', bg: '3,8,14' },
     free:    { tint: '#34d399', title: 'FREE FORM',        hud: ['SCANNING', 'DECOMPILE', 'AMPLIFY', 'LIMIT BREAK', 'RECOMPILE'], mult: 'EXPAND', rain: '167,243,208' },
     capsule: { tint: '#facc15', tint2: '#fde68a', title: 'CAPSULE UNLOCKED', hud: ['SCANNING', 'DECOMPILE', 'AMPLIFY', 'LIMIT BREAK', 'ARMOR LOCK'], mult: 'EXPAND', rain: '253,224,71', flash: '255,247,214' },
     jogress: { tint: '#f472b6', tint2: '#38bdf8', title: 'DNA SYNCHRONIZED', hud: ['SCANNING', 'DNA SPLIT', 'SYNC', 'FUSION', 'RECOMPILE'], mult: 'SYNC', rain: '249,168,212' },
@@ -794,7 +795,7 @@
         const td2 = lerp(far, R, easeIn(Math.max(0, q - .08)));
         g.globalAlpha = k * .35; g.strokeStyle = tint; g.lineWidth = 1.5 * dpr;
         g.beginPath(); g.moveTo(x + Math.cos(a) * td2, y + Math.sin(a) * td2); g.lineTo(px, py); g.stroke();
-        g.globalAlpha = k; g.strokeStyle = i % 3 ? '#ffffff' : tint; g.lineWidth = 2.6 * dpr;
+        g.globalAlpha = k; g.strokeStyle = i % 3 ? '#ffffff' : tint2; g.lineWidth = 2.6 * dpr;
         g.beginPath(); g.moveTo(px - s, py); g.lineTo(px + s, py); g.moveTo(px, py - s); g.lineTo(px, py + s); g.stroke();
         if (q > .94) ring(px, py, s * (1 + (q - .94) * 40), k * (1 - q) * 12, 1.5, '#ffffff');
       }
@@ -807,14 +808,26 @@
       const path = s => { g.beginPath(); g.moveTo(x, y - r * s); g.quadraticCurveTo(x + r * .55 * s, y - r * .82 * s, x + r * .78 * s, y - r * .78 * s);
         g.quadraticCurveTo(x + r * .8 * s, y + r * .25 * s, x, y + r * s); g.quadraticCurveTo(x - r * .8 * s, y + r * .25 * s, x - r * .78 * s, y - r * .78 * s);
         g.quadraticCurveTo(x - r * .55 * s, y - r * .82 * s, x, y - r * s); g.closePath(); };
-      const sg = g.createLinearGradient(0, y - r, 0, y + r); sg.addColorStop(0, tint + '30'); sg.addColorStop(1, tint + '05');
-      path(1); g.fillStyle = sg; g.fill(); g.lineWidth = 3 * dpr; g.stroke();
-      path(.9); g.lineWidth = 1.2 * dpr; g.stroke();
-      g.lineWidth = r * .07; g.globalAlpha = clamp(k) * .45; g.beginPath(); g.moveTo(x, y - r * .7); g.lineTo(x, y + r * .7); g.moveTo(x - r * .5, y - r * .2); g.lineTo(x + r * .5, y - r * .2); g.stroke();
+      // 뒤에서 비치는 후광, 방패 양옆으로 펼쳐지는 빛의 날개
+      const aura = g.createRadialGradient(x, y, r * .2, x, y, r * 1.9); aura.addColorStop(0, `rgba(${FLASH},.32)`); aura.addColorStop(.5, tint2 + '22'); aura.addColorStop(1, tint2 + '00');
+      g.save(); g.globalCompositeOperation = 'lighter'; g.fillStyle = aura; g.beginPath(); g.arc(x, y, r * 1.9, 0, Math.PI * 2); g.fill();
+      for (const sd of [-1, 1]) for (let i = 0; i < 6; i++) {
+        const a = (-.35 - i * .2) * Math.PI, L = r * (1.35 - i * .1), fx = x + sd * r * .55, fy = y - r * .35;
+        const ex = fx + sd * Math.cos(a + Math.PI) * -L * .9, ey = fy + Math.sin(a) * L * .55 + i * r * .12;
+        const fg = g.createLinearGradient(fx, fy, ex, ey); fg.addColorStop(0, '#ffffff'); fg.addColorStop(1, tint2 + '00');
+        g.strokeStyle = fg; g.lineWidth = r * (.13 - i * .012); g.lineCap = 'round'; g.globalAlpha = clamp(k) * (.55 - i * .05);
+        g.beginPath(); g.moveTo(fx, fy); g.quadraticCurveTo((fx + ex) / 2, fy - r * .25, ex, ey); g.stroke();
+      }
       g.restore();
-      hexRing(x, y, r * 1.25, k * .5, 1.5, rot, tint);
-      g.save(); g.globalAlpha = k * .8; g.fillStyle = tint; g.font = `${10 * dpr}px Silkscreen, monospace`; g.textAlign = 'center'; g.textBaseline = 'middle';
-      const tx = 'VACCINE · FIREWALL ONLINE · '; for (let i = 0; i < 48; i++) { const a = -rot + i * Math.PI / 24; g.save(); g.translate(x + Math.cos(a) * r * 1.35, y + Math.sin(a) * r * 1.35); g.rotate(a + Math.PI / 2); g.fillText(tx[i % tx.length], 0, 0); g.restore(); }
+      const sg = g.createLinearGradient(0, y - r, 0, y + r); sg.addColorStop(0, tint2 + '3a'); sg.addColorStop(1, tint + '08');
+      g.strokeStyle = tint2; g.shadowColor = tint2;
+      path(1); g.fillStyle = sg; g.fill(); g.lineWidth = 3 * dpr; g.stroke();
+      g.strokeStyle = '#ffffff'; path(.9); g.lineWidth = 1.2 * dpr; g.stroke();
+      g.strokeStyle = tint2; g.lineWidth = r * .07; g.globalAlpha = clamp(k) * .55; g.beginPath(); g.moveTo(x, y - r * .7); g.lineTo(x, y + r * .7); g.moveTo(x - r * .5, y - r * .2); g.lineTo(x + r * .5, y - r * .2); g.stroke();
+      g.restore();
+      sacredCircle(x, y, r * 1.25, k * .5, rot);
+      g.save(); g.globalAlpha = k * .8; g.fillStyle = tint2; g.font = `${10 * dpr}px Silkscreen, monospace`; g.textAlign = 'center'; g.textBaseline = 'middle';
+      const tx = 'VACCINE · SANCTUM AEGIS · '; for (let i = 0; i < 48; i++) { const a = -rot + i * Math.PI / 24; g.save(); g.translate(x + Math.cos(a) * r * 1.35, y + Math.sin(a) * r * 1.35); g.rotate(a + Math.PI / 2); g.fillText(tx[i % tx.length], 0, 0); g.restore(); }
       g.restore();
     }
 
@@ -1092,6 +1105,11 @@
         }
         if (themeId === 'virus') drawTendrils(fall ? lerp(.5, 1, prog(t, T.scan, T.implode)) * enter : prog(t, T.scan, T.implode), A0 * (1 - .45 * prog(t, T.slam, T.slam + 1000)));
         infectK = themeId === 'virus' ? prog(t, T.scan, T.implode) : 0;
+        // 백신: 하늘에서 내려오는 빛기둥과 빛의 깃털 (성스러운 기운) — 성스러운 무리보다 조금 은은하게
+        if (themeId === 'vaccine') {
+          const vh = A0 * (prog(t, T.scan, T.scan + 900) * .75 * (1 - .5 * prog(t, T.implode, T.boom)) + .65 * prog(t, T.rebuild, T.rebuilt));
+          lightShafts(vh); featherFall(vh * (.3 + .6 * Math.max(ampP, result)));
+        }
         if (themeId === 'vaccine') purgeSweep(A0 * prog(t, T.scan, T.scan + 400) * (1 - prog(t, T.disEnd, T.amp0)) * .8, 1300);
         fallPrologue(cx, cy, S);
         // 새 모습의 속성 기운이 시작부터 희미하게 비쳐요
@@ -1193,7 +1211,7 @@
               al *= .55 + .45 * (depth + 1) / 2;
             } else {
               const ex = Math.cos(p.a0) * cl; let ey = Math.sin(p.lat) * .9 + Math.sin(p.a0) * .2;
-              if (themeId === 'holy') ey = -.35 - Math.abs(ey) * 1.2;   // 백신: 하늘로 흩어졌다가 위에서 내려와요
+              if (themeId === 'holy' || themeId === 'vaccine') ey = -.35 - Math.abs(ey) * 1.2;   // 성스러운 진화: 하늘로 흩어졌다가 위에서 내려와요
               const far = M * .7 * p.es * boomK;
               const bx = cx + ex * far, by = cy + ey * far;
               if (!rebuilding) { x = bx; y = by; col = themeId === 'free' ? p.hue : '#ffffff'; }
@@ -1336,7 +1354,7 @@
           const sA = (themeId === 'capsule' ? prog(t, T.slam, T.slam + 140) : prog(t, T.solid, T.slam)) * fadeOut;
           const punch = t >= T.slam ? 1 + .1 * (1 - easeOut(prog(t, T.slam, T.slam + 380))) : 1;
           sprite(B, cx, by, sprS * punch, { a: sA, white: themeId === 'capsule' ? 1 - prog(t, T.slam, T.slam + 500) : 1 - prog(t, T.solid + 300, T.slam + 200), glow: 40 });
-          if (themeId === 'holy') halo(cx, by - sprS * .5, sprS * .2, fadeOut * easeOut(prog(t, T.slam + 300, T.slam + 1000)));
+          if (themeId === 'holy' || themeId === 'vaccine') halo(cx, by - sprS * .5, sprS * .2, fadeOut * easeOut(prog(t, T.slam + 300, T.slam + 1000)));
           const rp = prog(t, T.slam, T.slam + 1000);
           hexRing(cx, by, S * (.35 + rp * 1.6), (1 - rp) * .9 * fadeOut, 3, rp * .6, '#ffffff');
           ring(cx, by, S * (.3 + rp * 1.1), (1 - rp) * .7 * fadeOut, 2);
