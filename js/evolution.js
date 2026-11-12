@@ -1,10 +1,11 @@
-/* 진화 연출 — 데이터 증폭 폭발 (약 35~50초, 빠르게 모드에서는 3배 빠르게)
+/* 진화 연출 — 데이터 증폭 폭발 (약 24~31초, 빠르게 모드에서는 3배 빠르게)
    1) 시작: 화면이 한 번 흔들리고 데이터 줄기가 화면을 가로질러요 (새 모습의 속성 기운이 희미하게 비쳐요)
    2) 스캔: 스캔선이 몸을 훑고, 몸이 디지털 데이터로 읽혀요
    3) 분해: 그림의 실제 픽셀이 아래에서부터 떨어져 나와 데이터 입자가 돼요
    4) 증폭: 입자가 소용돌이 구체를 이루고, 박자마다 ×2 ×4 ×8 … 로 복제되며 폭발적으로 커져요
             진화할 단계마다 박자 수가 달라요: 유년기 ×2 · 성장기 ×4 · 성숙기 ×16 · 완전체 ×128 · 궁극체 ×1024
             특별 진화는 ×1024를 넘어서며 숫자가 넘쳐흘러요 (오버플로 오류: 숫자가 음수 · 0 · NaN으로 깨지고 오류 창이 쏟아져요)
+   4.5) 속성 주입: 새 모습의 속성 기운이 구체에 스며들며 맥동해요 (ELEMENT INJECT)
    5) 임계: 모든 데이터가 한 점으로 빨려 들어갔다가 — 대폭발 (섬광 · 충격파 · 임팩트 프레임)
    6) 재구성: 사방으로 흩어진 입자가 새 모습의 픽셀 자리로 날아와 거대한 몸을 짜 맞추고, 실제 모습이 드러나요
    7) 결과: 회전하는 디스크 플랫폼과 빛기둥 위에 새 모습 · 이름 · 용량 막대 · 한 글자씩 써지는 설명
@@ -16,11 +17,12 @@
 (function () {
   'use strict';
   // 타임라인 (ms): 증폭 박자 수에 따라 증폭 구간 길이가 바뀌고, 그 뒤의 시점이 모두 함께 밀려요
-  const BASE = { in: 900, call: 1200, callOut: 4200, scan: 4400, scanEnd: 8600, dis: 8200, disEnd: 12400, amp0: 13400 };
-  const AFTER = { implode: 1000, boom: 2800, rebuild: 3800, solid: 8200, rebuilt: 8800, slam: 10000, hold: 18500, end: 20000 };   // 증폭이 끝난 때부터
+  const BASE = { in: 400, call: 500, callOut: 1800, scan: 1900, scanEnd: 3600, dis: 3400, disEnd: 5600, amp0: 6000 };
+  // 증폭이 끝난 때부터: 속성 주입(inject) → 응축 → 대폭발 → 재구성 → 결과
+  const AFTER = { inject: 300, implode: 2600, boom: 3300, rebuild: 3700, solid: 6600, rebuilt: 7000, slam: 7800, hold: 13500, end: 14300 };
   const BEATS = { '-1': 1, 0: 2, 1: 4, 2: 7, 3: 10, 4: 10 };   // 진화할 단계별 박자 수 (×2 ~ ×1024)
-  const SPAN = { 1: 2600, 2: 4400, 4: 7400, 7: 10400, 10: 12600 };
-  const OVF = 6, OVF_SPAN = 4600;                              // 특별 진화: ×1024를 넘어서 넘쳐흐르는 박자
+  const SPAN = { 1: 1600, 2: 2400, 4: 3800, 7: 5600, 10: 7200 };
+  const OVF = 6, OVF_SPAN = 3200;                              // 특별 진화: ×1024를 넘어서 넘쳐흐르는 박자
   const OVF_TXT = ['×2048', '×65536', '×16777216', '×2147483647', '×-2147483648', '×0'];
   const OVF_GARBAGE = ['×NaN', '×∞', 'ERR', '×0x7FFFFFFF', '×-0', '×??????', '×undefined', '×1.#INF'];
   function beatTimes(n, a, b, decay = .86) {                   // 점점 빨라지는 박자
@@ -190,7 +192,7 @@
   api.play = async function ({ from, to, partner = null, kind = 'EVOLUTION', label = '', attr = '', cap = '', fromCap = '', desc = '', speed = () => 1, alive = () => true, at = 0, power = 2, stage = null, fall = null } = {}) {
     const ST = stage == null ? Math.max(1, Math.min(4, power | 0)) : Math.max(-1, Math.min(4, stage | 0));
     const LV = ST + 2, SHK = LVL.shake[LV], GLW = LVL.glow[LV], OVER = ST >= 4;
-    const PRE = fall ? 9000 : 0;                                  // 타락: 친구가 사라지는 장면이 먼저 나와요
+    const PRE = fall ? 8000 : 0;                                  // 타락: 친구가 사라지는 장면이 먼저 나와요
     MAX_PARTS = LVL.parts[LV]; T = makeT(ST, PRE);
     const EL = elementOf(to, desc), ELD = EL ? ELEMENTS[EL] : null, EI = LVL.elem[LV];
     const img = n => (n && window.digiImage) ? window.digiImage(n) : null;
@@ -221,7 +223,7 @@
         const q = pts[i];
         parts.push({
           ox: q.x, oy: q.y, offX, col: q.c,
-          td: T.dis + (0.5 - q.y) * 3000 + Math.random() * 500,      // 아래에서부터 떨어져 나와요
+          td: T.dis + (0.5 - q.y) * 1500 + Math.random() * 300,      // 아래에서부터 떨어져 나와요
           a0: Math.random() * Math.PI * 2, lat: (Math.random() - .5) * 2.6, rr: .55 + Math.random() * .75,
           w: (.0011 + Math.random() * .0016) * (Math.random() < .5 ? 1 : -1), hue: `hsl(${Math.random() * 360 | 0},95%,65%)`, born: 0, es: .7 + Math.random() * .8, st: Math.random() * 900,
         });
@@ -459,7 +461,7 @@
       g.save(); g.font = `${fs}px "Do Hyeon", sans-serif`; g.textAlign = 'center';
       const tw = g.measureText(text).width, x0 = x - tw / 2 - 20 * dpr, wipeX = x0 + (tw + 40 * dpr) * easeOut(p);
       g.beginPath(); g.rect(x0 - 10, y - fs * 1.2, wipeX - x0 + 10, fs * 1.6); g.clip();
-      const off = (1 - easeOut(prog(p, .3, 1))) * 10 * dpr + (Math.random() < .06 ? 4 * dpr : 0);
+      const off = (1 - easeOut(prog(p, .3, 1))) * 10 * dpr;
       g.globalAlpha = a * .7; g.globalCompositeOperation = 'lighter';
       g.fillStyle = '#ff2d6f'; g.fillText(text, x - off, y);
       g.fillStyle = '#22d3ee'; g.fillText(text, x + off, y);
@@ -644,7 +646,7 @@
       const glowK = prog(t, T.solid - 600, T.slam), burst = easeOut(prog(t, T.slam, T.slam + 850));
       if (burst >= 1) return;
       for (const sh of shards) {
-        const ti = T.rebuild + 600 + sh.d * 3400, fin = easeOut(prog(t, ti - 1100, ti));
+        const ti = T.rebuild + 300 + sh.d * 2000, fin = easeOut(prog(t, ti - 800, ti));
         if (fin <= 0) continue;
         const am = (sh.a0 + sh.a1) / 2, rm = sh.r0 ? (sh.r0 + sh.r1) / 2 : .2;
         const hx = Math.cos(am) * rx * rm, hy = Math.sin(am) * ry * rm;
@@ -685,7 +687,7 @@
       g.moveTo(x, 0); g.lineTo(x, y - S * .78); g.moveTo(x, y + S * .78); g.lineTo(x, H); g.stroke();
       g.globalAlpha = k;
       const b = S * lerp(1.15, .62, easeInOut(close)); brackets(x - b, y - b, b * 2, b * 2, 24 * dpr, k, close >= 1 ? '#ffffff' : tint, 2.5);
-      g.font = `${11 * dpr}px Silkscreen, monospace`; g.textAlign = 'left'; g.shadowBlur = 0;
+      g.setTransform(1, 0, 0, 1, 0, 0); g.font = `${11 * dpr}px Silkscreen, monospace`; g.textAlign = 'left'; g.shadowBlur = 0;
       g.fillText(close >= 1 ? 'QUARANTINED' : `TARGET LOCK ${Math.round(close * 100)}%`, x + b + 8 * dpr, y - b + 10 * dpr);
       g.fillText(`THREAT 0x${byte(1, 7)}${byte(2, 3)}`, x + b + 8 * dpr, y - b + 26 * dpr);
       g.restore();
@@ -911,9 +913,9 @@
     function overflowFx(k) {
       if (k <= 0) return;
       const n = Math.min(16, Math.floor(k * 18));
-      g.save();
+      g.save(); g.setTransform(1, 0, 0, 1, 0, 0);
       for (let i = 0; i < n; i++) {
-        const bw = Math.min(W * .42, 260 * dpr), bh = 74 * dpr, px = rndS(i, 141) * (W - bw), py = rndS(i, 142) * (H - bh) + Math.sin(t / 90 + i) * (i % 3 ? 0 : 3 * dpr);
+        const bw = Math.min(W * .42, 260 * dpr), bh = 74 * dpr, px = rndS(i, 141) * (W - bw), py = rndS(i, 142) * (H - bh);
         g.globalAlpha = .92; g.fillStyle = '#0b0f1a'; g.fillRect(px, py, bw, bh);
         g.fillStyle = i % 2 ? '#e11d48' : '#1d4ed8'; g.fillRect(px, py, bw, 16 * dpr);
         g.strokeStyle = '#94a3b8'; g.lineWidth = 1 * dpr; g.strokeRect(px, py, bw, bh);
@@ -934,10 +936,10 @@
     function fallPrologue(cx, cy, S) {
       if (!fall || t >= PRE + 600) return;
       const out = 1 - prog(t, PRE - 500, PRE + 500), friendName = fall.friend || '';
-      const fx = cx + S * .62, ax = lerp(cx - S * .45, cx, easeInOut(prog(t, 4200, 7600))), fy = cy;
+      const fx = cx + S * .62, ax = lerp(cx - S * .45, cx, easeInOut(prog(t, 3800, 6600))), fy = cy;
       // 친구: 처음엔 곁에 있다가 아래에서부터 데이터 조각으로 흩어져 사라져요
-      const del = prog(t, 1600, 5000);
-      sprite(F, fx, fy + Math.sin(t / 420) * 4 * dpr, S * .7, { a: out * (1 - prog(t, 4600, 5200)), white: .25 * del, glow: 18, clipTop: 1 - del });
+      const del = prog(t, 1400, 4200);
+      sprite(F, fx, fy + Math.sin(t / 420) * 4 * dpr, S * .7, { a: out * (1 - prog(t, 4000, 4600)), white: .25 * del, glow: 18, clipTop: 1 - del });
       if (F && del > 0) {
         g.save(); g.globalCompositeOperation = 'lighter';
         const st = Math.max(1, Math.floor(F.pts.length / 400)), s7 = S * .7;
@@ -949,7 +951,7 @@
         g.restore();
       }
       // 파트너: 점점 검게 물들고, 검은 촉수가 다가와요
-      const dk = prog(t, 4200, PRE);
+      const dk = prog(t, 3800, PRE);
       drawTendrils(dk * .5, out);
       sprite(A, ax, cy + Math.sin(t / 380) * 5 * dpr, S, { a: out, glow: 20 });
       corrupt(A, ax, cy, S, .7 * dk, 1);
@@ -958,12 +960,12 @@
       const beatK = Math.pow(Math.max(0, Math.sin(t / 260)), 8) * dk;
       if (beatK > 0) { const vg = g.createRadialGradient(cx, cy, Math.min(W, H) * .25, cx, cy, Math.max(W, H) * .7); vg.addColorStop(0, '#00000000'); vg.addColorStop(1, '#ff0033'); g.save(); g.globalAlpha = out * beatK * .6; g.fillStyle = vg; g.fillRect(-60, -60, W + 120, H + 120); g.restore(); }
       // 글자
-      g.save(); g.textAlign = 'center';
-      const lost = prog(t, 2400, 3000) * (1 - prog(t, 6200, 6800));
+      g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.textAlign = 'center';
+      const lost = prog(t, 2000, 2600) * (1 - prog(t, 5400, 6000));
       if (lost > 0) { g.globalAlpha = out * lost; g.font = `${14 * dpr}px Silkscreen, monospace`; g.fillStyle = '#f87171'; g.shadowColor = '#f43f5e'; g.shadowBlur = 14 * dpr;
         g.fillText(`SIGNAL LOST · ${byte(3, 9)}${byte(5, 2)}`, fx, fy - S * .5); g.font = `${Math.min(26, W / dpr / 18) * dpr}px "Do Hyeon", sans-serif`; g.fillStyle = '#ffffff';
         g.fillText(`${friendName}의 신호가 끊어졌어요`, cx, cy + S * .78); }
-      const sad = prog(t, 6400, 7000) * (1 - prog(t, PRE - 300, PRE + 200));
+      const sad = prog(t, 5600, 6200) * (1 - prog(t, PRE - 300, PRE + 200));
       if (sad > 0) { g.globalAlpha = out * sad; g.font = `${Math.min(26, W / dpr / 18) * dpr}px "Do Hyeon", sans-serif`; g.fillStyle = '#fda4af'; g.shadowColor = '#a855f7'; g.shadowBlur = 20 * dpr;
         g.fillText('슬픔이 마음을 검게 물들여요…', cx, cy + S * .78);
         g.font = `${12 * dpr}px Silkscreen, monospace`; g.fillStyle = '#f43f5e'; g.fillText(`CORRUPTION ${Math.round(dk * 100)}%`, cx, cy + S * .78 + 26 * dpr); }
@@ -1023,7 +1025,7 @@
         }
         if (themeId === 'virus') drawTendrils(fall ? lerp(.5, 1, prog(t, T.scan, T.implode)) * enter : prog(t, T.scan, T.implode), A0 * (1 - .45 * prog(t, T.slam, T.slam + 1000)));
         infectK = themeId === 'virus' ? prog(t, T.scan, T.implode) : 0;
-        if (themeId === 'vaccine') purgeSweep(A0 * prog(t, T.scan, T.scan + 600) * (1 - prog(t, T.disEnd, T.amp0)) * .8, 2100);
+        if (themeId === 'vaccine') purgeSweep(A0 * prog(t, T.scan, T.scan + 400) * (1 - prog(t, T.disEnd, T.amp0)) * .8, 1300);
         fallPrologue(cx, cy, S);
         // 새 모습의 속성 기운이 시작부터 희미하게 비쳐요
         elemFx(cx, cy, S, cy + S * .5, A0 * enter * prog(t, T.call, T.scan) * (1 - prog(t, T.disEnd, T.amp0 + 1500)) * .5, EI * .3);
@@ -1073,7 +1075,19 @@
         }
 
         /* 확장 · 증폭: 큰 육각 프레임이 돌고, 박자마다 육각 파동이 퍼져요 */
-        const Rbase = S * (.42 + 1.25 * easeIn(ampP)) * (1 + T.amp.reduce((m, b) => m + (t >= b ? .08 * Math.exp(-(t - b) / 140) : 0), 0));
+        // 심장박동: 배수가 오를 때마다 쿵-쿵! 두 번 뛰고, 두 번째 박동이 숫자가 바뀌는 순간과 겹쳐요 (박자가 빨라질수록 촘촘해져요)
+        let heart = 0;
+        if (t < T.implode) for (let i = 0; i < T.amp.length; i++) {
+          const b = T.amp[i], gap = Math.min(1100, i ? b - T.amp[i - 1] : 1100);
+          // 쿵(약하게, 직전) — 쿵!(세게, 숫자가 바뀌는 바로 그 순간)
+          [[.24, .65], [0, 1]].forEach(([off, amp], j) => {
+            const p = b - gap * off, d = (t - p) / 65;
+            if (d > -3 && d < 4) heart = Math.max(heart, amp * Math.exp(-d * d * (d < 0 ? 2.5 : 1)));
+            if (!j && t >= p && t < b) once('hb' + i, () => shake(2 + i * .4, 140));
+          });
+        }
+        heart *= A0;
+        const Rbase = S * (.42 + 1.25 * easeIn(ampP)) * (1 + .09 * heart) * (1 + T.amp.reduce((m, b) => m + (t >= b ? .08 * Math.exp(-(t - b) / 140) : 0), 0));
         const implodeK = 1 - easeIn(prog(t, T.implode, T.boom));
         themeFrame(cx, cy, Math.max(S * .7, Rbase * 1.12) * implodeK, A0 * prog(t, T.dis, T.amp[0]) * (1 - prog(t, T.implode - 100, T.boom)), t * (.0003 + ampP * .0012));
         T.amp.forEach((b, i) => { const q = prog(t, b, b + 700); if (q > 0 && q < 1) { if (themeId === 'holy') ring(cx, cy, Rbase * (1 + q * 1.6), (1 - q) * A0, 4 - q * 3, i % 2 ? '#ffffff' : tint); else hexRing(cx, cy, Rbase * (1 + q * 1.6), (1 - q) * A0, 4 - q * 3, i * .3, i % 2 ? tint2 : tint); } });
@@ -1099,7 +1113,7 @@
             const vx = Math.cos(ang) * cl * R, vy = Math.sin(p.lat) * R * .9, depth = Math.sin(ang) * cl;
             let x, y, col, al = A0 * pa * (p.born ? clamp((t - p.born) / 250) : 1);
             if (t < T.boom) {
-              const k = easeInOut(prog(t, p.td, p.td + 1800));
+              const k = easeInOut(prog(t, p.td, p.td + 1100));
               const hx = cx + (p.offX ? p.offX * Math.min(W * .24, S * .85) : 0) + p.ox * S * (partner ? .8 : 1);
               const hy = cy + p.oy * S * (partner ? .8 : 1);
               let sx = cx + vx, sy = cy + vy;
@@ -1117,7 +1131,7 @@
               const bx = cx + ex * far, by = cy + ey * far;
               if (!rebuilding) { x = bx; y = by; col = themeId === 'free' ? p.hue : '#ffffff'; }
               else {
-                const k = easeInOut(prog(t, T.rebuild + p.st * 2.6, T.rebuild + p.st * 2.6 + 2200));
+                const k = easeInOut(prog(t, T.rebuild + p.st * 1.4, T.rebuild + p.st * 1.4 + 1500));
                 x = lerp(bx, cx + p.hx * homeS, k); y = lerp(by, cy + p.hy * homeS, k);
                 col = k > .55 ? p.hc : (k > .2 ? tint2 : (themeId === 'free' ? p.hue : tint));
               }
@@ -1134,10 +1148,19 @@
           const vk = A0 * prog(t, T.amp0 - 600, T.amp0) * (1 - prog(t, T.implode, T.boom));
           firewall(cx, cy, Rbase * 1.15 * implodeK, vk, prog(t, T.amp0 - 600, T.implode - 600));
           antibodies(cx, cy, Rbase * implodeK, vk, Math.round(6 + 34 * ampP));
-          if (t >= T.implode && t < T.boom) { g.save(); g.globalAlpha = A0 * prog(t, T.implode, T.implode + 200); g.textAlign = 'center'; g.fillStyle = '#ffffff'; g.shadowColor = tint; g.shadowBlur = 20 * dpr; g.font = `${14 * dpr}px Silkscreen, monospace`; g.fillText('FIREWALL LOCKED · INTEGRITY 100%', cx, cy - S * .7); g.restore(); }
+          if (t >= T.implode && t < T.boom) { g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = A0 * prog(t, T.implode, T.implode + 200); g.textAlign = 'center'; g.fillStyle = '#ffffff'; g.shadowColor = tint; g.shadowBlur = 20 * dpr; g.font = `${14 * dpr}px Silkscreen, monospace`; g.fillText('FIREWALL LOCKED · INTEGRITY 100%', cx, cy - S * .7); g.restore(); }
         }
         // 속성 효과: 증폭되는 구체 둘레에서 박자마다 거세져요
-        elemFx(cx, cy, Math.max(S * .7, Rbase), cy + Math.max(S * .7, Rbase) * .55, A0 * prog(t, T.amp0 - 400, T.amp0 + 600) * (1 - prog(t, T.implode, T.boom)) * .75, EI * (.35 + .55 * ampP));
+        const injK = prog(t, T.inject, T.inject + 500) * (1 - prog(t, T.implode, T.implode + 300));
+        elemFx(cx, cy, Math.max(S * .7, Rbase), cy + Math.max(S * .7, Rbase) * .55, A0 * prog(t, T.amp0 - 400, T.amp0 + 600) * (1 - prog(t, T.implode, T.boom)) * (.75 + .25 * injK), EI * (.35 + .55 * ampP + .7 * injK));
+        // 속성 주입: 증폭이 끝나면 새 모습의 속성이 구체에 스며들며 맥동해요 (속성이 없으면 안정화)
+        if (injK > 0) {
+          const ic = ELD ? ELD.col : tint, ip = ((t - T.inject) % 520) / 520;
+          for (let j = 0; j < 2; j++) { const q = (ip + j * .5) % 1; ring(cx, cy, Rbase * implodeK * (1 + q * .9), A0 * injK * (1 - q) * .9, 3 + 5 * EI * (1 - q), ic); }
+          g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = A0 * injK; g.textAlign = 'center'; g.fillStyle = '#ffffff'; g.shadowColor = ic; g.shadowBlur = 18 * dpr; g.font = `${14 * dpr}px Silkscreen, monospace`;
+          const pct = Math.round(100 * prog(t, T.inject, T.implode - 200));
+          g.fillText(ELD ? `ELEMENT INJECT · ${ELD.name} ${pct}%` : `STABILIZING ${pct}%`, cx, cy + Math.min(H * .4, Rbase * implodeK + 40 * dpr)); g.restore();
+        }
         if (themeId === 'capsule') {
           capsuleOrbit(cx, cy, Rbase * 1.3 * implodeK, A0 * prog(t, T.dis, T.amp[0]) * (1 - prog(t, T.implode, T.boom)), t * .0012, S);
           capsuleShell(cx, cy, S, M, A0);
@@ -1150,11 +1173,11 @@
           const bi = T.amp.filter(b => t >= b).length - 1, lastBeat = T.amp[bi];
           if (bi >= 0) {
             const q = prog(t, lastBeat, lastBeat + 520), after = inOvf && t > T.amp[T.amp.length - 1] + 500;
-            g.save(); g.globalAlpha = (after ? .9 : 1 - q) * A0; g.textAlign = 'center'; g.fillStyle = '#ffffff'; g.shadowColor = inOvf ? '#ff1744' : tint; g.shadowBlur = 30 * dpr;
-            const fs = Math.round((inOvf ? 70 + 50 * easeOut(q) : 60 + 90 * easeOut(q)) * dpr);
+            g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = (after ? .9 : Math.max(1 - q, .3 + .6 * heart)) * A0; g.textAlign = 'center'; g.fillStyle = '#ffffff'; g.shadowColor = inOvf ? '#ff1744' : tint; g.shadowBlur = 30 * dpr;
+            const fs = Math.round((inOvf ? 70 + 50 * easeOut(q) : 60 + 90 * easeOut(q)) * (1 + .16 * heart) * dpr);
             g.font = `${fs}px Silkscreen, monospace`;
             if (inOvf) {                                         // 넘쳐흐른 숫자: 색이 갈라지고 흔들려요
-              const jx = (Math.random() - .5) * 14 * dpr * (1 + ovfK), jy = (Math.random() - .5) * 8 * dpr;
+              const jx = 0, jy = 0;
               g.globalCompositeOperation = 'lighter'; g.shadowBlur = 0;
               g.fillStyle = '#ff1744'; g.fillText(multTxt, cx + jx - 6 * dpr, cy + 30 * dpr + jy);
               g.fillStyle = '#00e5ff'; g.fillText(multTxt, cx + jx + 6 * dpr, cy + 30 * dpr - jy);
@@ -1170,11 +1193,17 @@
             g.restore();
           }
         }
+        // 심장박동에 맞춰 화면 가장자리가 맥동해요
+        if (heart > .02) {
+          const vg = g.createRadialGradient(cx, cy, Math.min(W, H) * (.3 - .05 * heart), cx, cy, Math.max(W, H) * .72);
+          vg.addColorStop(0, tint + '00'); vg.addColorStop(1, inOvf ? '#ff1744' : tint);
+          g.save(); g.globalAlpha = heart * .38; g.fillStyle = vg; g.fillRect(-60, -60, W + 120, H + 120); g.restore();
+        }
         // 왼쪽 위 판독기
         if (t >= T.scan && t < T.rebuilt) {
           const capNow = mbFrom * Math.pow(mbTo / mbFrom, easeIn(prog(t, T.amp[0] - 300, T.boom)));
           const hA = A0 * prog(t, T.scan, T.scan + 400) * (1 - prog(t, T.rebuilt - 400, T.rebuilt));
-          g.save(); g.globalAlpha = hA; g.textAlign = 'left'; g.fillStyle = tint; g.shadowColor = tint; g.shadowBlur = 12 * dpr;
+          g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = hA; g.textAlign = 'left'; g.fillStyle = tint; g.shadowColor = tint; g.shadowBlur = 12 * dpr;
           const x0 = 22 * dpr; let y0 = 40 * dpr;
           g.font = `${11 * dpr}px Silkscreen, monospace`; g.fillText(`DIGITAL DATA AMPLIFIER · ${ADDR}`, x0, y0);
           g.fillStyle = '#ffffff'; g.font = `${26 * dpr}px Silkscreen, monospace`; y0 += 34 * dpr;
@@ -1184,6 +1213,7 @@
           g.fillText(`PACKETS   ${inOvf && t < T.boom ? (Math.random() < .5 ? '-2,147,483,648' : 'NaN') : (baseCount * mult).toLocaleString()}`, x0, y0); y0 += 19 * dpr;
           if (ELD) { g.fillStyle = ELD.col; g.fillText(`ELEMENT   ${ELD.name}`, x0, y0); y0 += 19 * dpr; g.fillStyle = '#cbd5e1'; }
           g.fillText(`ROUTES    ${Math.round(nodes.length * (1 + ampP * 3))}`, x0, y0); y0 += 19 * dpr;
+          if (t >= T.amp0 - 1200 && t < T.boom) { g.fillStyle = heart > .3 ? '#ffffff' : '#fda4af'; g.fillText(`PULSE     ${heart > .3 ? '♥' : '♡'} ${Math.round(72 + 110 * ampP)} BPM`, x0, y0); y0 += 19 * dpr; g.fillStyle = '#cbd5e1'; }
           const syncP = Math.round(100 * prog(t, T.scan, T.rebuilt));
           g.fillText(`SYNC      ${syncP}%`, x0, y0); y0 += 12 * dpr;
           g.fillStyle = 'rgba(255,255,255,.15)'; g.fillRect(x0, y0, 200 * dpr, 5 * dpr);
@@ -1256,6 +1286,7 @@
 
         if (LV >= 6 && t >= T.slam) sparkles(cx, by, S, fadeOut * prog(t, T.slam, T.slam + 600), t);
         if (t >= T.slam) {
+          g.setTransform(1, 0, 0, 1, 0, 0);   // 결과 화면의 글자 · 테두리는 흔들리지 않아요
           const rA = fadeOut, vw = W / dpr;
           // 화면 테두리 HUD
           const fr = easeOut(prog(t, T.slam, T.slam + 500));

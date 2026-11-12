@@ -919,7 +919,7 @@
     }
     setStay(on, regionId) { this.staying = on; this.stayRegion = on ? this.G.regions.find(g => g.id === (regionId ?? this.currentRegion())) : null; if (!on) this.roamed = []; }
     /* explore mode: region labels + hover + pick by screen position */
-    setExplore(on) { this.exploring = on; this.hover = -1; }
+    setExplore(on) { this.exploring = on; this.hover = -1; if (on && !this.idleT) this.idleT = performance.now(); }   // 신호 추적 없이 바로 떠나도 구역 이름이 서서히 나타나요
     // 시점 고정(1인칭): 여행 중 구역과 구역 사이를 이동할 때 카메라가 이동 방향을 바라보며 따라가요
     setFpv(on) { this.fpv = !!on; }
     unlock(id) { this.unlocked.add(id); }

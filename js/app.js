@@ -442,23 +442,29 @@ function startJourney(randomFocus){
   requestAnimationFrame(updateInset);
   if (randomFocus) beginJourney(randomFocus); else pickDirection();
 }
-// 무작위로 시작하기: 파트너와 모험 방향을 모두 무작위로 골라 바로 떠나요
-function randomStart(){
-  if (busy || J) return;
-  lastRes = { dg: pickFrom(DIGI) };
+// 무작위로 시작하기: 신호 추적으로 무작위 파트너를 찾은 뒤, 모험 방향도 무작위로 골라 바로 떠나요
+async function randomStart(){
+  if (busy || J) return; busy = true;
+  const dg = pickFrom(DIGI), names = DIGI.map(d => d.ko), who = (babyLine(dg) || [dg.ko])[0];   // 추적 끝에 나타나는 이름은 시작할 모습(유아기)
   openNet(); hideCard();
+  $('netSkip').hidden = false;
+  if (reduced) { NET.trace({ partner: who, names }); NET.skip(); }
+  await NET.trace({ partner: who, names });
+  $('netSkip').hidden = true; busy = false;
+  if (!netEl.classList.contains('on')) return;          // 추적 중에 닫았으면 그만
+  lastRes = { dg };
   startJourney(pickFrom(Object.keys(JD.focus)));
 }
 // 떠나기 전에 모험 방향을 한 번 골라요 (지난번 고른 방향이 미리 표시돼요). 여행 중에도 패널에서 바꿀 수 있어요
 function pickDirection(){
   const me = J;
   $('journey').hidden = true;
-  $('netStat').innerHTML = `JOURNEY START · ${esc(J.dg.ko)}<b>모험 방향을 골라 주세요</b>`;
+  $('netStat').innerHTML = `JOURNEY START · ${esc(J.form)}<b>모험 방향을 골라 주세요</b>`;
   card.innerHTML = `
     <div class="tag">JOURNEY START · DIRECTION</div>
     <p class="eyebrow">떠나기 전에</p>
     <h2 class="sum-title dir-title">모험 방향을 골라 주세요</h2>
-    <p class="desc">${esc(J.dg.ko)}${wa(J.dg.ko)} 어떤 여행을 할까요? 고른 방향의 성향이 걸음마다 저절로 자라고, 일어나는 사건도 조금 달라져요. 여행 중에도 패널에서 언제든 바꿀 수 있어요.</p>
+    <p class="desc">${esc(J.form)}${wa(J.form)} 어떤 여행을 할까요?${J.stage < 0 ? ` (${esc(J.dg.ko)}의 ${stageLabel(J.stage)} 모습이에요)` : ''} 고른 방향의 성향이 걸음마다 저절로 자라고, 일어나는 사건도 조금 달라져요. 여행 중에도 패널에서 언제든 바꿀 수 있어요.</p>
     <div class="dir-list" role="radiogroup" aria-label="모험 방향">${Object.entries(JD.focus).map(([k, f]) => `<button type="button" class="dir-b${k === J.focus ? ' on' : ''}" data-f="${k}" role="radio" aria-checked="${k === J.focus}"><b><i aria-hidden="true">${f.icon}</i>${esc(f.name)}</b><small>${esc(f.desc)}</small></button>`).join('')}</div>`;
   card.hidden = false; card.scrollTop = 0;
   requestAnimationFrame(() => card.classList.add('in'));
@@ -473,9 +479,9 @@ function pickDirection(){
 function beginJourney(focus){
   J.focus = focus;
   hideCard(); $('journey').hidden = false; requestAnimationFrame(updateInset); renderJourney();
-  const f = JD.focus[J.focus], ko = J.dg.ko;
-  const young = J.stage < 0 ? ` 아직은 ${stageLabel(J.stage)} 모습인 ${J.form}${ro(J.form)} 시작해서, 유년기를 거쳐 ${ko}${ro(ko)} 자라요.` : '';
-  log(`${ko}${wa(ko)} 「${f.name}」 방향으로 여행을 떠나요. ${f.desc}.${young} 가고 싶은 네트워크 구역을 눌러 보세요. 마우스 휠로 지도를 확대·축소할 수 있어요.`, 'sys');
+  const f = JD.focus[J.focus], ko = J.dg.ko, me = J.form;
+  const young = J.stage < 0 ? ` 지금은 ${stageLabel(J.stage)} 모습이고, 유년기를 거쳐 ${ko}${ro(ko)} 자라요.` : '';
+  log(`${me}${wa(me)} 「${f.name}」 방향으로 여행을 떠나요. ${f.desc}.${young} 가고 싶은 네트워크 구역을 눌러 보세요. 마우스 휠로 지도를 확대·축소할 수 있어요.`, 'sys');
   idleStatus();
 }
 function endJourney(){
