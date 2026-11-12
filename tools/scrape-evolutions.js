@@ -93,7 +93,7 @@ function withPart(rest) {
   const dm = (/Digimental of (\w+)/i.exec(p) || [])[1] || null;
   const GROUP = /Colors and Levels|Attributes and Levels|Final Xros|Units|Pendulum|Bracelet|Category|Wikia|Series/i;   // "이런 디지몬들과 함께" 같은 묶음
   const mons = links.filter(l => !/Digimental|Crest|Spirit|Digivice|Card/i.test(l) && !GROUP.test(l));
-  return { opt: /\(\s*with or without/i.test(p), withMons: mons, multi: /\]\]\s*,?\s*and\s+(?:the\s+)?\[\[/i.test(p),
+  return { opt: /\(\s*with\s+or\s+without/i.test(p), withMons: mons, multi: /\]\]\s*,?\s*and\s+(?:the\s+)?\[\[/i.test(p.replace(/'{2,3}/g, '')),   // 굵은 글씨('''[[A]]''' and '''[[B]]''')도 알아봐요
     vague: !mons.length && !dm && (links.some(l => GROUP.test(l)) || /\{\{Wikia/i.test(p)) || !mons.length && !dm && /\b(any|attribute|certain|every|a|an)\b/i.test(p.replace(/\[\[[^\]]*\]\]/g, '')), dm };
 }
 
@@ -121,7 +121,9 @@ function withPart(rest) {
       // 짝: 우리 도감에 있는 디지몬만. 정해진 짝 없이 "어떤 디지몬과 함께" 이거나 셋 이상이 합쳐지는 줄은 버려요
       const partners = [...new Set((e.withMons || []).flatMap(m => titleToIds[m] || []).filter(x => idSet.has(x) && x !== id && x !== to))];
       const needsPartner = !e.opt && (e.withMons || []).length > 0;
-      if (!e.opt && (e.multi || e.vague)) continue;
+      // 셋 이상 합체: "and"로 이어진 짝 중 실제 디지몬이 둘 이상일 때만 (아이템 · 장치는 세지 않아요)
+      const multi = e.multi && (e.withMons || []).filter(m => (titleToIds[m] || []).length).length >= 2;
+      if (!e.opt && (multi || e.vague)) continue;
       if (needsPartner && !partners.length) continue;
       const solo = !needsPartner;
       const prev = seen.get(to);

@@ -149,6 +149,8 @@ function renderCard(res){
    한 판 흐름: 구역 선택 → 이동(먼 곳일수록 오래) → 그 구역 안을 6~8걸음 돌아다님
    → 그중 2~3번만 선택지, 나머지는 일어난 일을 기록 → 탐험이 끝나면 다음 구역 선택 (약 30분) */
 const JD = window.JOURNEY;
+// 직접 이어 붙인 진화(JD.extraEvo)를 도감의 "진화 후" 목록에 혼자 진화하는 줄로 더해요
+for (const [a, b] of JD.extraEvo || []) { const row = (window.DIGI_DB || {})[a]; if (row && !(row[6] = row[6] || []).some(e => e[0] === b)) row[6].push([b, 0, '그림으로 이어 붙인 진화']); }
 const bat = w => { w = String(w).replace(/(\s*\([^)]*\))+\s*$/, ''); const c = w.charCodeAt(w.length - 1); return (c >= 0xAC00 && c <= 0xD7A3) ? (c - 0xAC00) % 28 : -1; };
 const ga = w => bat(w) > 0 ? '이' : '가', wa = w => bat(w) > 0 ? '과' : '와', eul = w => bat(w) > 0 ? '을' : '를';
 const ro = w => { const k = bat(w); return (k <= 0 || k === 8) ? '로' : '으로'; };

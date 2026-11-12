@@ -511,7 +511,6 @@
             "Digital Monster COLOR Digimon Xros Wars 15th Edition",
             "Digimon Story: Super Xros Wars"
           ],
-          "solo": false,
           "with": [
             "barbamon"
           ]
@@ -37266,22 +37265,6 @@
           ]
         },
         {
-          "id": "shoutmonx4k",
-          "main": true,
-          "src": [
-            "애니 XW 11화",
-            "Digital Monster COLOR Digimon Xros Wars 15th Edition"
-          ],
-          "solo": false,
-          "with": [
-            "shoutmon",
-            "baristamon",
-            "starmons",
-            "knightmon",
-            "paunchessmon-white"
-          ]
-        },
-        {
           "id": "shoutmonx5",
           "main": true,
           "src": [
@@ -38228,24 +38211,6 @@
           ]
         },
         {
-          "id": "shoutmonx4s",
-          "main": true,
-          "src": [
-            "애니 XW 41화",
-            "Digimon Story: Super Xros Wars",
-            "Digital Monster COLOR Digimon Xros Wars 15th Edition",
-            "Digimon Fusion Loader Toy",
-            "Digimon Xros Loader Toy"
-          ],
-          "solo": false,
-          "with": [
-            "shoutmon",
-            "baristamon",
-            "dorulumon",
-            "spadamon"
-          ]
-        },
-        {
           "id": "shoutmonx5",
           "main": true,
           "src": [
@@ -39189,19 +39154,6 @@
           ]
         },
         {
-          "id": "shoutmonx3gm",
-          "main": true,
-          "src": [
-            "카드 D4-20"
-          ],
-          "solo": false,
-          "with": [
-            "greymon",
-            "mailbirdramon",
-            "metalgreymon"
-          ]
-        },
-        {
           "id": "shoutmonx4",
           "main": true,
           "src": [
@@ -39307,19 +39259,6 @@
           "with": [
             "dorulumon",
             "starmons"
-          ]
-        },
-        {
-          "id": "shoutmonx4b",
-          "main": true,
-          "src": [
-            "애니 XW 18화"
-          ],
-          "solo": false,
-          "with": [
-            "dorulumon",
-            "starmons",
-            "beelzebumon-xwars"
           ]
         },
         {
@@ -39705,55 +39644,6 @@
           ]
         },
         {
-          "id": "shoutmonx4b",
-          "main": true,
-          "src": [
-            "애니 XW 16화",
-            "Digimon Story: Super Xros Wars",
-            "Digital Monster COLOR Digimon Xros Wars 15th Edition",
-            "Digimon Mini Shoutmon Red"
-          ],
-          "solo": false,
-          "with": [
-            "dorulumon",
-            "baristamon",
-            "beelzebumon-xwars",
-            "starmons"
-          ]
-        },
-        {
-          "id": "shoutmonx4k",
-          "main": true,
-          "src": [
-            "애니 XW 11화",
-            "Digital Monster COLOR Digimon Xros Wars 15th Edition"
-          ],
-          "solo": false,
-          "with": [
-            "dorulumon",
-            "baristamon",
-            "starmons",
-            "knightmon",
-            "paunchessmon-white"
-          ]
-        },
-        {
-          "id": "shoutmonx4s",
-          "main": true,
-          "src": [
-            "애니 XW 41화",
-            "Digimon Story: Super Xros Wars",
-            "Digital Monster COLOR Digimon Xros Wars 15th Edition"
-          ],
-          "solo": false,
-          "with": [
-            "dorulumon",
-            "baristamon",
-            "starmons",
-            "spadamon"
-          ]
-        },
-        {
           "id": "shoutmonx5",
           "main": true,
           "src": [
@@ -39763,22 +39653,6 @@
             "Digimon Story: Super Xros Wars",
             "Digital Monster COLOR Digimon Xros Wars 15th Edition",
             "Digimon Mini Shoutmon Red"
-          ]
-        },
-        {
-          "id": "shoutmonx5b",
-          "main": true,
-          "src": [
-            "애니 XW 29화",
-            "Digital Monster COLOR Digimon Xros Wars 15th Edition"
-          ],
-          "solo": false,
-          "with": [
-            "dorulumon",
-            "baristamon",
-            "beelzebumon-xwars",
-            "starmons",
-            "sparrowmon"
           ]
         },
         {
@@ -40184,19 +40058,6 @@
           "solo": false,
           "with": [
             "revolmon"
-          ]
-        },
-        {
-          "id": "deckergreymon",
-          "main": true,
-          "src": [
-            "애니 XW 29화",
-            "Digital Monster COLOR Digimon Xros Wars 15th Edition"
-          ],
-          "solo": false,
-          "with": [
-            "mailbirdramon",
-            "deckerdramon"
           ]
         },
         {
@@ -49886,22 +49747,6 @@
           ]
         },
         {
-          "id": "omegamon_merciful",
-          "main": true,
-          "src": [
-            "Digimon Adventure tri. - Chapter 6"
-          ],
-          "solo": false,
-          "with": [
-            "omegamon",
-            "heraklekabuterimon",
-            "hououmon",
-            "vikemon",
-            "seraphimon",
-            "holydramon"
-          ]
-        },
-        {
           "id": "rafflesimon",
           "main": false,
           "src": [
@@ -51763,22 +51608,6 @@
           "src": [
             "Digimon Mini Ver. 3.0"
           ]
-        },
-        {
-          "id": "omegamon_merciful",
-          "main": true,
-          "src": [
-            "Digimon Adventure tri. - Chapter 6"
-          ],
-          "solo": false,
-          "with": [
-            "omegamon",
-            "hououmon",
-            "heraklekabuterimon",
-            "rosemon",
-            "vikemon",
-            "seraphimon"
-          ]
         }
       ]
     },
@@ -51850,22 +51679,6 @@
           "main": false,
           "src": [
             "Digimon Accel Justice Genome"
-          ]
-        },
-        {
-          "id": "omegamon_merciful",
-          "main": true,
-          "src": [
-            "Digimon Adventure tri. - Chapter 6"
-          ],
-          "solo": false,
-          "with": [
-            "omegamon",
-            "heraklekabuterimon",
-            "rosemon",
-            "vikemon",
-            "seraphimon",
-            "holydramon"
           ]
         },
         {
@@ -52420,22 +52233,6 @@
           "with": [
             "imperialdramonfightermode",
             "imperialdramondragonmode"
-          ]
-        },
-        {
-          "id": "omegamon_merciful",
-          "main": true,
-          "src": [
-            "Digimon Adventure tri. - Chapter 6"
-          ],
-          "solo": false,
-          "with": [
-            "omegamon",
-            "hououmon",
-            "rosemon",
-            "vikemon",
-            "seraphimon",
-            "holydramon"
           ]
         },
         {
@@ -54860,19 +54657,6 @@
           "with": [
             "shinegreymon"
           ]
-        },
-        {
-          "id": "ultimatechaosmon",
-          "main": true,
-          "src": [
-            "Digimon New Century"
-          ],
-          "solo": false,
-          "with": [
-            "bancholeomon",
-            "sleipmon",
-            "valdurmon"
-          ]
         }
       ]
     },
@@ -55196,22 +54980,6 @@
           ]
         },
         {
-          "id": "omegamon_merciful",
-          "main": true,
-          "src": [
-            "Digimon Adventure tri. - Chapter 6"
-          ],
-          "solo": false,
-          "with": [
-            "omegamon",
-            "heraklekabuterimon",
-            "rosemon",
-            "vikemon",
-            "hououmon",
-            "holydramon"
-          ]
-        },
-        {
           "id": "slashangemon",
           "main": false,
           "src": [
@@ -55357,22 +55125,6 @@
             "Digimon Linkz",
             "카드 BT27-043",
             "Digimon New Century"
-          ]
-        },
-        {
-          "id": "ultimatechaosmon",
-          "main": true,
-          "src": [
-            "Digimon Collectors",
-            "Digimon New Century"
-          ],
-          "solo": false,
-          "with": [
-            "darkdramon",
-            "bancholeomon",
-            "valdurmon",
-            "chaosmon",
-            "chaosmonvaldurarm"
           ]
         }
       ]
@@ -59333,22 +59085,6 @@
           ]
         },
         {
-          "id": "omegamon_merciful",
-          "main": true,
-          "src": [
-            "Digimon Adventure tri. - Chapter 6"
-          ],
-          "solo": false,
-          "with": [
-            "omegamon",
-            "heraklekabuterimon",
-            "rosemon",
-            "hououmon",
-            "seraphimon",
-            "holydramon"
-          ]
-        },
-        {
           "id": "plesiomon",
           "main": false,
           "src": [
@@ -61336,21 +61072,6 @@
       ],
       "wikimon": "Lady Devimon",
       "evolvesTo": [
-        {
-          "id": "apoclymon",
-          "main": true,
-          "src": [
-            "카드 St-318"
-          ],
-          "solo": false,
-          "with": [
-            "vamdemon",
-            "pinochimon",
-            "skullsatamon",
-            "evilmon",
-            "picodevimon"
-          ]
-        },
         {
           "id": "beelstarmon",
           "main": false,
@@ -66605,31 +66326,6 @@
           "main": false,
           "src": [
             "Digivice Burst Toy"
-          ]
-        },
-        {
-          "id": "madleomon",
-          "main": true,
-          "src": [
-            "애니 XW 01화"
-          ],
-          "solo": false,
-          "with": [
-            "chikurimon",
-            "troopmon"
-          ]
-        },
-        {
-          "id": "madleomon:armedmode",
-          "main": true,
-          "src": [
-            "애니 XW 01화"
-          ],
-          "solo": false,
-          "with": [
-            "madleomon",
-            "chikurimon",
-            "troopmon"
           ]
         },
         {
@@ -74022,7 +73718,6 @@
             "Digimon Story: Time Stranger",
             "Digimon Pendulum Ver.20th"
           ],
-          "solo": false,
           "with": [
             "dagomon",
             "marindevimon"
@@ -75339,19 +75034,6 @@
           "main": false,
           "src": [
             "카드 EX6-025"
-          ]
-        },
-        {
-          "id": "seitengokuwmon",
-          "main": true,
-          "src": [
-            "애니 DB 47화",
-            "Pendulum COLOR 6 Saiyu Warriors"
-          ],
-          "solo": false,
-          "with": [
-            "gokuwmon",
-            "sagomon"
           ]
         },
         {
@@ -77006,21 +76688,6 @@
       "wikimon": "Skull Satamon",
       "evolvesTo": [
         {
-          "id": "apoclymon",
-          "main": true,
-          "src": [
-            "카드 St-318"
-          ],
-          "solo": false,
-          "with": [
-            "vamdemon",
-            "pinochimon",
-            "ladydevimon",
-            "evilmon",
-            "picodevimon"
-          ]
-        },
-        {
           "id": "barbamon",
           "main": false,
           "src": [
@@ -78414,19 +78081,6 @@
           ]
         },
         {
-          "id": "shakamon",
-          "main": true,
-          "src": [
-            "Digimon New Century"
-          ],
-          "solo": false,
-          "with": [
-            "chohakkaimon",
-            "gokuwmon",
-            "sanzomon"
-          ]
-        },
-        {
           "id": "shinegreymon",
           "main": false,
           "src": [
@@ -78640,19 +78294,6 @@
           "main": false,
           "src": [
             "카드 EX6-025"
-          ]
-        },
-        {
-          "id": "seitengokuwmon",
-          "main": true,
-          "src": [
-            "애니 DB 47화",
-            "Pendulum COLOR 6 Saiyu Warriors"
-          ],
-          "solo": false,
-          "with": [
-            "chohakkaimon",
-            "gokuwmon"
           ]
         },
         {
@@ -90313,21 +89954,6 @@
           "main": false,
           "src": [
             "Digimon Story: Time Stranger"
-          ]
-        },
-        {
-          "id": "chimairamon",
-          "main": true,
-          "src": [
-            "Digimon Xros Wars - Chapter 10"
-          ],
-          "solo": false,
-          "with": [
-            "kabuterimon",
-            "garurumon",
-            "skullgreymon",
-            "kuwagamon",
-            "airdramon"
           ]
         },
         {
@@ -123069,21 +122695,6 @@
           ]
         },
         {
-          "id": "chimairamon",
-          "main": true,
-          "src": [
-            "Digimon Xros Wars - Chapter 10"
-          ],
-          "solo": false,
-          "with": [
-            "monochromon",
-            "garurumon",
-            "skullgreymon",
-            "kuwagamon",
-            "kabuterimon"
-          ]
-        },
-        {
           "id": "cyberdramon",
           "main": false,
           "src": [
@@ -124732,21 +124343,6 @@
       ],
       "wikimon": "Evilmon",
       "evolvesTo": [
-        {
-          "id": "apoclymon",
-          "main": true,
-          "src": [
-            "카드 St-318"
-          ],
-          "solo": false,
-          "with": [
-            "vamdemon",
-            "pinochimon",
-            "skullsatamon",
-            "ladydevimon",
-            "picodevimon"
-          ]
-        },
         {
           "id": "bigmamemon",
           "main": false,
@@ -134326,21 +133922,6 @@
           "main": false,
           "src": [
             "St-726"
-          ]
-        },
-        {
-          "id": "apoclymon",
-          "main": true,
-          "src": [
-            "카드 St-318"
-          ],
-          "solo": false,
-          "with": [
-            "vamdemon",
-            "pinochimon",
-            "skullsatamon",
-            "ladydevimon",
-            "evilmon"
           ]
         },
         {
