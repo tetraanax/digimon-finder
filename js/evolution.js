@@ -115,6 +115,7 @@
     dorumon: [[155, 131]],                             // 꼬리-뿔 사이
     angewomon: [[116, 146], [171, 30], [128, 60], [123, 119], [120, 134]],   // 왼쪽 다리-장식 리본 사이, 머리-두른 리본 사이, 머리 왼쪽, 왼팔-몸통 사이
     bancholeomon: [[158, 212], [148, 216], [103, 225], [220, 229]],   // 망토·다리·꼬리 사이
+    meramon: 'all',                                    // 불꽃 몸 사이사이
     tailmon: [[206, 147]],                             // 머리-꼬리 사이
     silphymon: [[168, 110], [115, 103]],               // 몸-오른팔 사이, 몸-왼쪽 날개 사이
   };
@@ -150,7 +151,10 @@
           }
           // 그림 안쪽에 갇힌 흰 배경(날개·꼬리·팔 사이): 순백 몸통과 색으로는 구별되지 않아서, 그림마다 직접 찍어 둔 자리만 지워요
           const file = (src.split('/').pop() || '').replace(/\.\w+$/, '');
-          for (const [hx, hy] of HOLES[file] || []) {
+          // 'all': 흰 부분이 원래 없는 그림(불꽃 몸 등)이라 갇힌 흰 칸을 모두 지워요
+          const spots = HOLES[file] === 'all' ? [] : HOLES[file] || [];
+          if (HOLES[file] === 'all') for (let i = 0; i < W * H; i++) if (!gone[i] && light(i)) spots.push([(i % W) * 320 / W, ((i / W) | 0) * 320 / H]);
+          for (const [hx, hy] of spots) {
             const x = Math.round(hx * W / 320), y = Math.round(hy * H / 320); if (x < 0 || y < 0 || x >= W || y >= H) continue;
             stack.push(y * W + x);
             while (stack.length) {
