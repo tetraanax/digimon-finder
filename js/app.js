@@ -427,7 +427,7 @@ function babyLine(dg){
   for (const kid of parentsOf(name, /유년기/)) { const egg = parentsOf(kid, /유아기/)[0]; if (egg) return [egg, kid]; }
   return null;
 }
-function startJourney(){
+function startJourney(randomFocus){
   const dg = lastRes.dg, baby = babyLine(dg);
   const st0 = baby ? -2 : 0, f0 = baby ? baby[0] : dg.ko;
   J = { dg, stage: st0, form: f0, label: stageLabel(st0), moves: 0, exp: 0, ended: false, baby: baby || [],
@@ -440,7 +440,14 @@ function startJourney(){
   netEl.classList.add('explore'); NET.setExplore(true); NET.setStay(false);
   $('journey').hidden = false;
   requestAnimationFrame(updateInset);
-  pickDirection();
+  if (randomFocus) beginJourney(randomFocus); else pickDirection();
+}
+// 무작위로 시작하기: 파트너와 모험 방향을 모두 무작위로 골라 바로 떠나요
+function randomStart(){
+  if (busy || J) return;
+  lastRes = { dg: pickFrom(DIGI) };
+  openNet(); hideCard();
+  startJourney(pickFrom(Object.keys(JD.focus)));
 }
 // 떠나기 전에 모험 방향을 한 번 골라요 (지난번 고른 방향이 미리 표시돼요). 여행 중에도 패널에서 바꿀 수 있어요
 function pickDirection(){
@@ -458,13 +465,18 @@ function pickDirection(){
   card.querySelector('.dir-b.on')?.focus({ preventScroll: true });
   card.querySelector('.dir-list').onclick = e => {
     const b = e.target.closest('[data-f]'); if (!b || J !== me) return;
-    J.focus = b.dataset.f; try { localStorage.setItem('digi-focus', J.focus); } catch (er) {}
-    hideCard(); $('journey').hidden = false; requestAnimationFrame(updateInset); renderJourney();
-    const f = JD.focus[J.focus], ko = J.dg.ko;
-    const young = J.stage < 0 ? ` 아직은 ${stageLabel(J.stage)} 모습인 ${J.form}${ro(J.form)} 시작해서, 유년기를 거쳐 ${ko}${ro(ko)} 자라요.` : '';
-    log(`${ko}${wa(ko)} 「${f.name}」 방향으로 여행을 떠나요. ${f.desc}.${young} 가고 싶은 네트워크 구역을 눌러 보세요. 마우스 휠로 지도를 확대·축소할 수 있어요.`, 'sys');
-    idleStatus();
+    try { localStorage.setItem('digi-focus', b.dataset.f); } catch (er) {}
+    beginJourney(b.dataset.f);
   };
+}
+// 고른 방향으로 여행을 떠나요 (무작위로 시작하면 방향 고르기 없이 바로 여기로)
+function beginJourney(focus){
+  J.focus = focus;
+  hideCard(); $('journey').hidden = false; requestAnimationFrame(updateInset); renderJourney();
+  const f = JD.focus[J.focus], ko = J.dg.ko;
+  const young = J.stage < 0 ? ` 아직은 ${stageLabel(J.stage)} 모습인 ${J.form}${ro(J.form)} 시작해서, 유년기를 거쳐 ${ko}${ro(ko)} 자라요.` : '';
+  log(`${ko}${wa(ko)} 「${f.name}」 방향으로 여행을 떠나요. ${f.desc}.${young} 가고 싶은 네트워크 구역을 눌러 보세요. 마우스 휠로 지도를 확대·축소할 수 있어요.`, 'sys');
+  idleStatus();
 }
 function endJourney(){
   J = null; NET.setExplore(false); NET.setStay(false); NET.speed = 1;
@@ -1010,6 +1022,7 @@ addEventListener('keydown', e => {
   if (window.evoCinematic.active) window.evoCinematic.skip(); else if (busy || (J && J.busy)) NET.skip(); else closeNet();
 });
 
+$('randomGo').addEventListener('click', randomStart);
 $('f').addEventListener('submit', e => {
   e.preventDefault();
   const inp = read();
