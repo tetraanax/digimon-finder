@@ -849,9 +849,11 @@
     }
     status(a, b) { const k = a + '|' + b; if (k !== this.lastStatus) { this.lastStatus = k; this.onStatus(a, b); } }
 
-    bfs(start) {
+    // within: 이 구역 번호가 주어지면 그 구역 안의 점만 지나가요 (구역 안을 돌아다닐 때 바깥으로 나갔다 들어오지 않게)
+    bfs(start, within) {
       const G = this.G, dist = new Int32Array(G.n).fill(-1), prev = new Int32Array(G.n).fill(-1), q = [start]; dist[start] = 0;
-      for (let h = 0; h < q.length; h++) { const u = q[h]; for (const v of G.adj[u]) if (dist[v] < 0) { dist[v] = dist[u] + 1; prev[v] = u; q.push(v); } }
+      const inside = within == null ? null : G.RG;
+      for (let h = 0; h < q.length; h++) { const u = q[h]; for (const v of G.adj[u]) if (dist[v] < 0 && (!inside || inside[v] === within)) { dist[v] = dist[u] + 1; prev[v] = u; q.push(v); } }
       return { dist, prev };
     }
     /* first search: long dive from far away, ends on the partner's node */
@@ -867,7 +869,9 @@
     travelTo(regionId, { label = '', sub = '', flash = false, title = '', img = null } = {}) {
       const G = this.G, reg = G.regions.find(g => g.id === regionId);
       if (!reg || this.mode !== 'idle') return Promise.resolve(null);
-      const { dist, prev } = this.bfs(this.current);
+      const same = this.G.RG[this.current] === regionId;
+      let { dist, prev } = this.bfs(this.current, same ? regionId : null);
+      if (same && !reg.nodes.some(i => i !== this.current && dist[i] > 0)) ({ dist, prev } = this.bfs(this.current));
       const opts = reg.nodes.filter(i => i !== this.current && dist[i] > 0).sort((a, b) => dist[a] - dist[b]);
       if (!opts.length) return Promise.resolve(null);
       // random landing spot, but among the nearer part of the region so trips stay short
@@ -907,7 +911,8 @@
     wander(regionId, text = '') {
       const G = this.G, reg = G.regions.find(g => g.id === regionId);
       if (!reg || this.mode !== 'idle') return Promise.resolve(null);
-      const { dist, prev } = this.bfs(this.current);
+      // 지금 이 구역 안에 있으면 구역 안으로만 길을 찾아요
+      const { dist, prev } = this.bfs(this.current, this.G.RG[this.current] === regionId ? regionId : null);
       this.roamed = this.roamed || [];
       const opts = reg.nodes.filter(i => i !== this.current && dist[i] > 1 && !this.roamed.includes(i)).sort((a, b) => dist[a] - dist[b]);
       if (!opts.length) return Promise.resolve(null);
