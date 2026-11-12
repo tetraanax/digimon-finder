@@ -1252,6 +1252,7 @@
         const sprS = S * 1.05 * settle * lerp(1, .9, lift);
         const by = cy - S * .12 * lift + Math.sin(t / 420) * 5 * dpr * prog(t, T.slam, T.slam + 900);
         const footY = by + sprS * .47;
+        const textY = cy - S * .12 * lift + sprS * .47;   // 이름 · 설명은 그림의 둥실거림을 따라가지 않아요
         if (t >= T.rebuild) {
           const dk = A0 * result;
           if (LV >= 5) godRays(cx, by, M * .75, dk * (LV >= 6 ? .26 : .17), t * (LV >= 6 ? .00018 : .0001), LV >= 6 ? 24 : 14);
@@ -1310,7 +1311,7 @@
           }
           // 이름
           const nameF = Math.min(96, vw / 7) * dpr;
-          const nameY = footY + nameF * .9 + 22 * dpr;
+          const nameY = textY + nameF * .9 + 22 * dpr;
           title(`${to}`, cx, nameY, nameF, prog(t, T.slam + 80, T.slam + 650), rA);
           // 정보 줄 + 용량 막대
           const infoA = rA * easeOut(prog(t, T.slam + 500, T.slam + 900));
