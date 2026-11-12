@@ -1,40 +1,81 @@
-/* 진화 연출 — 데이터 증폭 폭발 (약 15초, 빠르게 모드에서는 3배 빠르게)
-   1) 시작: 화면이 한 번 흔들리고 데이터 줄기가 화면을 가로질러요
+/* 진화 연출 — 데이터 증폭 폭발 (약 35~50초, 빠르게 모드에서는 3배 빠르게)
+   1) 시작: 화면이 한 번 흔들리고 데이터 줄기가 화면을 가로질러요 (새 모습의 속성 기운이 희미하게 비쳐요)
    2) 스캔: 스캔선이 몸을 훑고, 몸이 디지털 데이터로 읽혀요
    3) 분해: 그림의 실제 픽셀이 아래에서부터 떨어져 나와 데이터 입자가 돼요
    4) 증폭: 입자가 소용돌이 구체를 이루고, 박자마다 ×2 ×4 ×8 … 로 복제되며 폭발적으로 커져요
-            (주변 네트워크의 모든 노드가 라우팅 선을 따라 패킷을 보내고, 육각 프레임과 파동이 퍼져요)
-            (용량 숫자가 치솟고, 구체가 화면을 가득 채워요)
+            진화할 단계마다 박자 수가 달라요: 유년기 ×2 · 성장기 ×4 · 성숙기 ×16 · 완전체 ×128 · 궁극체 ×1024
+            특별 진화는 ×1024를 넘어서며 숫자가 넘쳐흘러요 (오버플로 오류: 숫자가 음수 · 0 · NaN으로 깨지고 오류 창이 쏟아져요)
    5) 임계: 모든 데이터가 한 점으로 빨려 들어갔다가 — 대폭발 (섬광 · 충격파 · 임팩트 프레임)
    6) 재구성: 사방으로 흩어진 입자가 새 모습의 픽셀 자리로 날아와 거대한 몸을 짜 맞추고, 실제 모습이 드러나요
-   7) 결과: 회전하는 디스크 플랫폼과 빛기둥 위에 새 모습 · LIMIT BREAK · 이름 · 용량 막대 · 한 글자씩 써지는 설명
-   단계(power 1 성숙기 · 2 완전체 · 3 궁극체 · 4 특별/초궁극)가 오를수록 화려해져요:
-     입자 수 · 복제 박자(×8 → ×256) · 흔들림 · 폭발 파동과 파편이 커지고,
-     3단계부터 번개와 회전하는 빛살, 4단계는 두 번째 폭발 · 무지개 파동 · 반짝이는 별가루까지 더해져요
-   사용: await window.evoCinematic.play({ from, to, partner, kind, label, cap, fromCap, desc, speed, alive, at, power })
+   7) 결과: 회전하는 디스크 플랫폼과 빛기둥 위에 새 모습 · 이름 · 용량 막대 · 한 글자씩 써지는 설명
+   새 모습의 속성(불 · 물 · 얼음 · 번개 · 식물 · 바람 · 대지 · 빛 · 어둠 · 기계)에 따라 특수 효과가 더해지고,
+   진화할 단계가 높을수록 효과가 약한 기운에서 화면을 집어삼킬 만큼 거세져요.
+   타락(fall): 친구를 잃은 슬픔으로 타락할 때는 친구가 사라지고 몸이 검게 물드는 장면이 먼저 나와요.
+   사용: await window.evoCinematic.play({ from, to, partner, kind, label, cap, fromCap, desc, speed, alive, at, stage, fall })
    화면을 누르거나 건너뛰기 / Esc → 이름 장면으로, 한 번 더 누르면 닫혀요. */
 (function () {
   'use strict';
-  const T = {
-    in: 400, call: 500, callOut: 1600,
-    scan: 1700, scanEnd: 3000, dis: 2900, disEnd: 4300,
-    amp: [4600, 5400, 6100, 6700, 7200, 7600],        // 복제 박자 (점점 빨라져요)
-    implode: 7900, boom: 8500, rebuild: 8800, rebuilt: 10700, solid: 10500,
-    slam: 11200, hold: 15000, end: 15700,
-  };
+  // 타임라인 (ms): 증폭 박자 수에 따라 증폭 구간 길이가 바뀌고, 그 뒤의 시점이 모두 함께 밀려요
+  const BASE = { in: 900, call: 1200, callOut: 4200, scan: 4400, scanEnd: 8600, dis: 8200, disEnd: 12400, amp0: 13400 };
+  const AFTER = { implode: 1000, boom: 2800, rebuild: 3800, solid: 8200, rebuilt: 8800, slam: 10000, hold: 18500, end: 20000 };   // 증폭이 끝난 때부터
+  const BEATS = { '-1': 1, 0: 2, 1: 4, 2: 7, 3: 10, 4: 10 };   // 진화할 단계별 박자 수 (×2 ~ ×1024)
+  const SPAN = { 1: 2600, 2: 4400, 4: 7400, 7: 10400, 10: 12600 };
+  const OVF = 6, OVF_SPAN = 4600;                              // 특별 진화: ×1024를 넘어서 넘쳐흐르는 박자
+  const OVF_TXT = ['×2048', '×65536', '×16777216', '×2147483647', '×-2147483648', '×0'];
+  const OVF_GARBAGE = ['×NaN', '×∞', 'ERR', '×0x7FFFFFFF', '×-0', '×??????', '×undefined', '×1.#INF'];
+  function beatTimes(n, a, b, decay = .86) {                   // 점점 빨라지는 박자
+    const w = Array.from({ length: n }, (_, i) => Math.pow(decay, i)), tot = w.reduce((m, x) => m + x, 0);
+    let acc = 0; return w.map(x => { const v = a + (b - a) * acc / tot; acc += x; return Math.round(v); });
+  }
+  function makeT(stage, pre) {
+    const n = BEATS[stage] ?? 4, amp = beatTimes(n, BASE.amp0, BASE.amp0 + SPAN[n]);
+    let endAmp = BASE.amp0 + SPAN[n], ovf = [];
+    if (stage >= 4) { ovf = beatTimes(OVF, endAmp, endAmp + OVF_SPAN, .74); endAmp += OVF_SPAN; }
+    const o = { ...BASE, amp: amp.concat(ovf), nNormal: n, ovf0: ovf.length ? ovf[0] : Infinity };
+    for (const k in AFTER) o[k] = endAmp + AFTER[k];
+    if (pre) { for (const k in o) if (typeof o[k] === 'number' && k !== 'nNormal') o[k] += pre; o.amp = o.amp.map(b => b + pre); }
+    return o;
+  }
+  let T = makeT(1, 0);
   let MAX_PARTS = 5200;
-  // 단계별 세기 (index = power)
-  const POWER = {
-    parts: [0, 1500, 2800, 4400, 6400],
-    amp: [null, [4600, 5600, 6600], [4600, 5400, 6200, 7000], [4600, 5400, 6100, 6700, 7200, 7600], [4400, 5000, 5550, 6050, 6500, 6900, 7250, 7550]],
-    shake: [0, .45, .7, 1, 1.45], burst: [0, 90, 180, 300, 560], rings: [0, 2, 3, 4, 7], glow: [0, .55, .8, 1, 1.3],
-    stars: ['', '★☆☆☆', '★★☆☆', '★★★☆', '★★★★'],
+  // 단계별 세기 (index = LV: 1 유년기 · 2 성장기 · 3 성숙기 · 4 완전체 · 5 궁극체 · 6 특별)
+  const LVL = {
+    parts: [0, 700, 1000, 1500, 2800, 4400, 6400],
+    shake: [0, .25, .35, .45, .7, 1, 1.45], burst: [0, 40, 60, 90, 180, 300, 560], rings: [0, 1, 1, 2, 3, 4, 7], glow: [0, .4, .48, .55, .8, 1, 1.3],
+    elem: [0, .12, .22, .38, .6, .88, 1.25],
   };
+  const starsOf = lv => lv >= 6 ? '★★★★★∞' : '★'.repeat(lv) + '☆'.repeat(5 - lv);
+
+  /* 속성 효과: 새 모습의 이름 · 유형 · 필살기 · 설명에서 낱말을 찾아 가장 많이 맞는 속성을 골라요 */
+  const ELEMENTS = {
+    fire:    { name: 'FIRE',    col: '#ff7a1a', col2: '#ffd166', re: /불꽃|불덩이|불길|불길|화염|불의|불을|불로|플레임|파이어|버닝|용암|마그마|화산|작열|업화|화룡|피닉스|블레이즈|인페르노|태양|열선|뜨거운|타오르|불사조/g },
+    water:   { name: 'WATER',   col: '#38bdf8', col2: '#bae6fd', re: /물결|물줄기|물기둥|물방울|물속|바닷|바다|해양|파도|해일|아쿠아|워터|수룡|어인|인어|머메이드|마린|오션|돌고래|고래|상어|조개|해저|심해|거품|버블|웨이브|타이달|넵튠|수류|갑각|해룡|호수|강물/g },
+    ice:     { name: 'ICE',     col: '#7dd3fc', col2: '#f0f9ff', re: /얼음|얼어|얼려|냉기|빙하|빙결|빙산|아이스|프로스트|블리자드|동결|서리|눈보라|설인|설원|프리즈|콜드|극지|펭귄|차가운/g },
+    thunder: { name: 'THUNDER', col: '#facc15', col2: '#fef9c3', re: /번개|전기|전격|천둥|뇌전|뇌격|뇌신|뇌운|썬더|선더|볼트|라이트닝|스파크|일렉|플라즈마|전류|방전|벼락/g },
+    plant:   { name: 'PLANT',   col: '#4ade80', col2: '#f9a8d4', re: /식물|꽃|나무|잎|숲|덩굴|넝쿨|씨앗|포자|플라워|로즈|장미|우드|가시|뿌리|플랜트|버섯|선인장|열매|과일|요정/g },
+    wind:    { name: 'WIND',    col: '#a5f3fc', col2: '#ffffff', re: /바람|폭풍|회오리|토네이도|윈드|돌풍|태풍|사이클론|허리케인|질풍|선풍|스톰|조류|하늘을|날개/g },
+    earth:   { name: 'EARTH',   col: '#d6a35c', col2: '#f59e0b', re: /대지|바위|암석|돌덩이|돌멩이|땅|모래|지진|흙|광물|어스|그라운드|산맥|사막|암반|골렘|거암|가이아|광석/g },
+    light:   { name: 'LIGHT',   col: '#fde68a', col2: '#ffffff', re: /빛|성스|신성|천사|홀리|세인트|광휘|광채|천상|성검|성창|여신|축복|정화|후광|광선|성기사|로열나이츠/g },
+    dark:    { name: 'DARK',    col: '#a855f7', col2: '#f43f5e', re: /어둠|암흑|악마|그림자|다크|사령|언데드|저주|마왕|타천사|나이트메어|데스|해골|유령|고스트|흡혈|뱀파이어|지옥|명계|공포|타락|마계|블랙|마족/g },
+    metal:   { name: 'METAL',   col: '#cbd5e1', col2: '#facc15', re: /기계|사이보그|메탈|미사일|강철|머신|로봇|레이저|캐논|안드로이드|기갑|장갑|포탑|기관포|전투기|엔진|합금|크롬|사이버|드릴|기체/g },
+  };
+  function elementOf(name, desc) {
+    const d = (window.digiData && window.digiData(name)) || {};
+    const parts = [[name, 3], [d.type || '', 3], [(d.attacks || []).join(' '), 2], [desc || '', 1]];
+    let best = null, top = 0;
+    for (const [id, e] of Object.entries(ELEMENTS)) {
+      let s = 0; for (const [txt, w] of parts) s += ((String(txt).match(e.re) || []).length) * w;
+      if (s > top) { top = s; best = id; }
+    }
+    return best;
+  }
   const TINT = { 'EVOLUTION': '#38bdf8', 'JOGRESS EVOLUTION': '#f472b6', 'CAPSULE EVOLUTION': '#facc15', 'SPECIAL EVOLUTION': '#a78bfa' };
   /* 진화 형태별 테마
      data    — 데이터 증폭 (기본): 네트워크 · 육각 프레임 · 디스크
      holy    — 백신종 / 로열나이츠 · 사성수 · 올림포스: 위에서 내려오는 빛기둥, 빛의 깃털, 성스러운 문양 원, 머리 위 광륜, 입자가 하늘에서 내려와요
      virus   — 바이러스종 / 칠대마왕: 가장자리에서 자라는 검은 촉수, 몸을 갉아먹는 오염 블록, 가운데의 검은 핵이 데이터를 흡수, 화면 찢김
+     vaccine — 백신종: 위협 조준경이 몸을 붙잡아 격리하고, 정화 파동이 화면을 훑고, 육각 방화벽 돔이 칸칸이 켜지며 구체를 감싸요.
+               사방에서 십자 항체가 날아와 꽂히고, 결과 화면에는 커다란 방패 문장이 떠요 (SYSTEM SECURED)
      free    — 프리종: 무지갯빛 입자
      capsule — 캡슐(아머) 진화: 궤도를 도는 캡슐 판, 조각들이 날아와 캡슐 껍질로 맞물렸다가 깨지며 등장
      jogress — 조그레스: 두 디지몬의 데이터가 분홍 · 하늘색 이중 나선으로 꼬이다 하나로 합쳐져요 */
@@ -42,6 +83,7 @@
     data:    { title: 'LIMIT BREAK',      hud: ['SCANNING', 'DECOMPILE', 'AMPLIFY', 'LIMIT BREAK', 'RECOMPILE'], mult: 'EXPAND', rain: '125,211,252' },
     holy:    { tint: '#fcd34d', tint2: '#fff7d6', title: 'HOLY ASCENSION', hud: ['SCANNING', 'PURIFY', 'BLESS', 'ASCEND', 'DESCEND'], mult: 'BLESS', rain: '253,230,138', flash: '255,251,234' },
     virus:   { tint: '#f43f5e', tint2: '#a855f7', title: 'SYSTEM CORRUPTED', hud: ['SCANNING', 'INFECT', 'ABSORB', 'OVERFLOW', 'MUTATE'], mult: 'ABSORB', rain: '244,63,94', flash: '255,40,90', bg: '10,2,12' },
+    vaccine: { tint: '#4ade80', tint2: '#e0f2fe', title: 'SYSTEM SECURED', hud: ['THREAT SCAN', 'QUARANTINE', 'IMMUNIZE', 'FIREWALL', 'DEPLOY'], mult: 'IMMUNIZE', rain: '134,239,172', flash: '236,255,245', bg: '2,10,8' },
     free:    { tint: '#34d399', title: 'FREE FORM',        hud: ['SCANNING', 'DECOMPILE', 'AMPLIFY', 'LIMIT BREAK', 'RECOMPILE'], mult: 'EXPAND', rain: '167,243,208' },
     capsule: { tint: '#facc15', tint2: '#fde68a', title: 'CAPSULE UNLOCKED', hud: ['SCANNING', 'DECOMPILE', 'AMPLIFY', 'LIMIT BREAK', 'ARMOR LOCK'], mult: 'EXPAND', rain: '253,224,71', flash: '255,247,214' },
     jogress: { tint: '#f472b6', tint2: '#38bdf8', title: 'DNA SYNCHRONIZED', hud: ['SCANNING', 'DNA SPLIT', 'SYNC', 'FUSION', 'RECOMPILE'], mult: 'SYNC', rain: '249,168,212' },
@@ -49,9 +91,9 @@
   function pickTheme(kind, attr, label) {
     if (kind === 'CAPSULE EVOLUTION') return 'capsule';
     if (kind === 'JOGRESS EVOLUTION') return 'jogress';
-    if (/마왕|타천사|암흑진화/.test(label)) return 'virus';
-    if (/로열나이츠|사성수|올림포스/.test(label)) return 'holy';
-    return { vac: 'holy', vir: 'virus', fre: 'free' }[attr] || 'data';
+    if (/마왕|타천사|암흑진화|타락/.test(label)) return 'virus';
+    if (/로열나이츠|사성수|올림포스|삼대천사/.test(label)) return 'holy';
+    return { vac: 'vaccine', vir: 'virus', fre: 'free' }[attr] || 'data';
   }
   const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
   const prog = (t, a, b) => clamp((t - a) / (b - a));
@@ -145,11 +187,14 @@
   api.skip = () => { if (api._skip) api._skip(); };
   api.preload = name => cutout(window.digiImage && window.digiImage(name));
 
-  api.play = async function ({ from, to, partner = null, kind = 'EVOLUTION', label = '', attr = '', cap = '', fromCap = '', desc = '', speed = () => 1, alive = () => true, at = 0, power = 2 } = {}) {
-    const PW = Math.max(1, Math.min(4, power | 0)), SHK = POWER.shake[PW], GLW = POWER.glow[PW];
-    MAX_PARTS = POWER.parts[PW]; T.amp = POWER.amp[PW];
+  api.play = async function ({ from, to, partner = null, kind = 'EVOLUTION', label = '', attr = '', cap = '', fromCap = '', desc = '', speed = () => 1, alive = () => true, at = 0, power = 2, stage = null, fall = null } = {}) {
+    const ST = stage == null ? Math.max(1, Math.min(4, power | 0)) : Math.max(-1, Math.min(4, stage | 0));
+    const LV = ST + 2, SHK = LVL.shake[LV], GLW = LVL.glow[LV], OVER = ST >= 4;
+    const PRE = fall ? 9000 : 0;                                  // 타락: 친구가 사라지는 장면이 먼저 나와요
+    MAX_PARTS = LVL.parts[LV]; T = makeT(ST, PRE);
+    const EL = elementOf(to, desc), ELD = EL ? ELEMENTS[EL] : null, EI = LVL.elem[LV];
     const img = n => (n && window.digiImage) ? window.digiImage(n) : null;
-    const [A, B, P] = await Promise.all([cutout(img(from)), cutout(img(to)), cutout(img(partner))]);
+    const [A, B, P, F] = await Promise.all([cutout(img(from)), cutout(img(to)), cutout(img(partner)), cutout(img(fall && fall.friend))]);
     if (!alive()) return;
     const host = document.getElementById('net') || document.body;
     const cv = document.createElement('canvas');
@@ -176,7 +221,7 @@
         const q = pts[i];
         parts.push({
           ox: q.x, oy: q.y, offX, col: q.c,
-          td: T.dis + (0.5 - q.y) * 1300 + Math.random() * 250,      // 아래에서부터 떨어져 나와요
+          td: T.dis + (0.5 - q.y) * 3000 + Math.random() * 500,      // 아래에서부터 떨어져 나와요
           a0: Math.random() * Math.PI * 2, lat: (Math.random() - .5) * 2.6, rr: .55 + Math.random() * .75,
           w: (.0011 + Math.random() * .0016) * (Math.random() < .5 ? 1 : -1), hue: `hsl(${Math.random() * 360 | 0},95%,65%)`, born: 0, es: .7 + Math.random() * .8, st: Math.random() * 900,
         });
@@ -197,12 +242,13 @@
       assignHome();
     }
 
-    let t = at, last = performance.now(), W = 0, H = 0, dpr = 1, cols = [], burst = [], mult = 1, beatsDone = 0;
+    let t = at, last = performance.now(), W = 0, H = 0, dpr = 1, cols = [], burst = [], mult = 1, beatsDone = 0, ovfTxt = '';
     const shakes = [], fired = new Set();
     const shake = (amp, dur) => shakes.push({ t0: t, amp: amp * SHK, dur });
     const once = (key, fn) => { if (!fired.has(key)) { fired.add(key); fn(); } };
     // 시작 시점을 건너뛴 경우(at, 건너뛰기) 지나간 박자의 복제를 미리 해 둬요
-    const catchUp = () => { T.amp.forEach((b, i) => { if (t >= b && beatsDone <= i) { clone(b); mult *= 2; beatsDone = i + 1; fired.add('amp' + i); } }); };
+    const beat = (b, i) => { clone(b); if (i < T.nNormal) mult *= 2; else ovfTxt = OVF_TXT[i - T.nNormal] || ovfTxt; beatsDone = i + 1; };
+    const catchUp = () => { T.amp.forEach((b, i) => { if (t >= b && beatsDone <= i) { beat(b, i); fired.add('amp' + i); } }); };
     catchUp();
     api.active = true;
     api._skip = () => { if (t < T.slam) { t = T.slam; catchUp(); ['boom', 'slamFx', 'call', 'scan'].forEach(k => fired.add(k)); } else if (t < T.hold) t = T.hold; };
@@ -235,7 +281,7 @@
       for (let x = step / 2; x < W; x += step)
         cols.push({ x, y: Math.random() * H, v: (0.25 + Math.random() * 0.6) * dpr, n: 5 + (Math.random() * 12 | 0) });
       buildNet(W / 2, H * .42, Math.min(W * .58, H * .44));
-      if (themeId === 'virus') buildTendrils();
+      if (themeId === 'virus' || fall) buildTendrils();
     }
     const HEX = '0123456789ABCDEF';
     const byte = (k, c) => HEX[(k * 7 + c + (t / 90 | 0)) % 16] + HEX[(k * 13 + c * 3 + (t / 140 | 0)) % 16];
@@ -595,10 +641,10 @@
     function capsuleShell(x, y, S, M, k) {
       if (k <= 0 || !shards.length || t < T.rebuild) return;
       const rx = S * .6, ry = S * .8;
-      const glowK = prog(t, T.solid - 300, T.slam), burst = easeOut(prog(t, T.slam, T.slam + 850));
+      const glowK = prog(t, T.solid - 600, T.slam), burst = easeOut(prog(t, T.slam, T.slam + 850));
       if (burst >= 1) return;
       for (const sh of shards) {
-        const ti = T.rebuild + 250 + sh.d * 1350, fin = easeOut(prog(t, ti - 600, ti));
+        const ti = T.rebuild + 600 + sh.d * 3400, fin = easeOut(prog(t, ti - 1100, ti));
         if (fin <= 0) continue;
         const am = (sh.a0 + sh.a1) / 2, rm = sh.r0 ? (sh.r0 + sh.r1) / 2 : .2;
         const hx = Math.cos(am) * rx * rm, hy = Math.sin(am) * ry * rm;
@@ -626,6 +672,305 @@
       }
     }
 
+    /* ---------- 백신: 조준 · 격리 · 정화 파동 · 육각 방화벽 · 십자 항체 · 방패 문장 ---------- */
+    // 위협 조준경: 도는 점선 원 두 겹, 화면 끝까지 뻗는 십자선, 안으로 조여 드는 격리 괄호
+    function lockOn(x, y, S, k, close) {
+      if (k <= 0) return;
+      g.save(); g.globalAlpha = k; g.strokeStyle = tint; g.fillStyle = tint; g.shadowColor = tint; g.shadowBlur = 12 * dpr; g.lineWidth = 1.5 * dpr;
+      for (let j = 0; j < 2; j++) {
+        const r = S * (.62 + j * .1), rot = t * (j ? -.0009 : .0006);
+        for (let i = 0; i < 12; i++) { const a = rot + i * Math.PI / 6; g.beginPath(); g.arc(x, y, r, a, a + Math.PI / 12); g.stroke(); }
+      }
+      g.globalAlpha = k * .45; g.beginPath(); g.moveTo(0, y); g.lineTo(x - S * .78, y); g.moveTo(x + S * .78, y); g.lineTo(W, y);
+      g.moveTo(x, 0); g.lineTo(x, y - S * .78); g.moveTo(x, y + S * .78); g.lineTo(x, H); g.stroke();
+      g.globalAlpha = k;
+      const b = S * lerp(1.15, .62, easeInOut(close)); brackets(x - b, y - b, b * 2, b * 2, 24 * dpr, k, close >= 1 ? '#ffffff' : tint, 2.5);
+      g.font = `${11 * dpr}px Silkscreen, monospace`; g.textAlign = 'left'; g.shadowBlur = 0;
+      g.fillText(close >= 1 ? 'QUARANTINED' : `TARGET LOCK ${Math.round(close * 100)}%`, x + b + 8 * dpr, y - b + 10 * dpr);
+      g.fillText(`THREAT 0x${byte(1, 7)}${byte(2, 3)}`, x + b + 8 * dpr, y - b + 26 * dpr);
+      g.restore();
+    }
+    // 정화 파동: 화면 위에서 아래로 쓸고 지나가는 밝은 띠
+    function purgeSweep(k, period) {
+      if (k <= 0) return;
+      const q = (t % period) / period, y = q * (H + 120 * dpr) - 60 * dpr;
+      g.save(); g.globalCompositeOperation = 'lighter';
+      const gr = g.createLinearGradient(0, y - 90 * dpr, 0, y);
+      gr.addColorStop(0, tint + '00'); gr.addColorStop(1, tint + '66');
+      g.globalAlpha = k; g.fillStyle = gr; g.fillRect(0, y - 90 * dpr, W, 90 * dpr);
+      g.fillStyle = '#ffffff'; g.shadowColor = tint; g.shadowBlur = 20 * dpr; g.fillRect(0, y - 1.5 * dpr, W, 3 * dpr);
+      g.shadowBlur = 0; g.font = `${10 * dpr}px Silkscreen, monospace`; g.textAlign = 'right'; g.fillText(`PURGE ${Math.round(q * 100)}%`, W - 20 * dpr, y - 6 * dpr);
+      g.restore();
+    }
+    // 육각 방화벽 돔: 칸이 하나씩 켜지며 구체를 감싸요 (가장자리일수록 밝게)
+    function firewall(x, y, R, k, lock) {
+      if (k <= 0 || R <= 4) return;
+      const c = R / 6.5, hw = c * Math.sqrt(3);
+      g.save(); g.globalCompositeOperation = 'lighter'; g.lineWidth = 1.3 * dpr; g.strokeStyle = tint;
+      for (let row = -8; row <= 8; row++) for (let col = -8; col <= 8; col++) {
+        const px = x + (col + (row & 1) * .5) * hw, py = y + row * c * 1.5, d = Math.hypot(px - x, py - y) / R;
+        if (d > .98) continue;
+        const h = rndS(row * 31 + col, 21); if (h > lock) continue;
+        const fresh = clamp(1 - (lock - h) * 6), edge = .25 + .75 * d * d;
+        g.globalAlpha = k * (edge * .55 + fresh * .6); hexPath(px, py, c * .92, Math.PI / 6); g.stroke();
+        if (fresh > 0) { g.globalAlpha = k * fresh * .35; g.fillStyle = '#ffffff'; g.fill(); }
+      }
+      g.globalAlpha = k * .8; g.shadowColor = tint; g.shadowBlur = 24 * dpr; g.lineWidth = 2.5 * dpr; g.beginPath(); g.arc(x, y, R, 0, Math.PI * 2); g.stroke();
+      g.restore();
+    }
+    // 십자 항체: 화면 가장자리에서 구체로 날아와 꽂혀요
+    function antibodies(x, y, R, k, n) {
+      if (k <= 0) return;
+      const far = Math.max(W, H) * .75;
+      g.save(); g.globalCompositeOperation = 'lighter'; g.lineCap = 'round';
+      for (let i = 0; i < n; i++) {
+        const q = (t * (.00035 + rndS(i, 22) * .0003) + rndS(i, 23)) % 1, a = rndS(i, 24) * Math.PI * 2 + Math.floor(t * .00035 + rndS(i, 23)) * 1.7;
+        const d = lerp(far, R, easeIn(q)), px = x + Math.cos(a) * d, py = y + Math.sin(a) * d, s = (5 + rndS(i, 25) * 6) * dpr;
+        const td2 = lerp(far, R, easeIn(Math.max(0, q - .08)));
+        g.globalAlpha = k * .35; g.strokeStyle = tint; g.lineWidth = 1.5 * dpr;
+        g.beginPath(); g.moveTo(x + Math.cos(a) * td2, y + Math.sin(a) * td2); g.lineTo(px, py); g.stroke();
+        g.globalAlpha = k; g.strokeStyle = i % 3 ? '#ffffff' : tint; g.lineWidth = 2.6 * dpr;
+        g.beginPath(); g.moveTo(px - s, py); g.lineTo(px + s, py); g.moveTo(px, py - s); g.lineTo(px, py + s); g.stroke();
+        if (q > .94) ring(px, py, s * (1 + (q - .94) * 40), k * (1 - q) * 12, 1.5, '#ffffff');
+      }
+      g.restore();
+    }
+    // 방패 문장: 결과 화면 뒤에 떠오르는 커다란 방패와 십자
+    function shieldEmblem(x, y, r, k, rot) {
+      if (k <= 0) return;
+      g.save(); g.globalAlpha = clamp(k); g.strokeStyle = tint; g.shadowColor = tint; g.shadowBlur = 26 * dpr;
+      const path = s => { g.beginPath(); g.moveTo(x, y - r * s); g.quadraticCurveTo(x + r * .55 * s, y - r * .82 * s, x + r * .78 * s, y - r * .78 * s);
+        g.quadraticCurveTo(x + r * .8 * s, y + r * .25 * s, x, y + r * s); g.quadraticCurveTo(x - r * .8 * s, y + r * .25 * s, x - r * .78 * s, y - r * .78 * s);
+        g.quadraticCurveTo(x - r * .55 * s, y - r * .82 * s, x, y - r * s); g.closePath(); };
+      const sg = g.createLinearGradient(0, y - r, 0, y + r); sg.addColorStop(0, tint + '30'); sg.addColorStop(1, tint + '05');
+      path(1); g.fillStyle = sg; g.fill(); g.lineWidth = 3 * dpr; g.stroke();
+      path(.9); g.lineWidth = 1.2 * dpr; g.stroke();
+      g.lineWidth = r * .07; g.globalAlpha = clamp(k) * .45; g.beginPath(); g.moveTo(x, y - r * .7); g.lineTo(x, y + r * .7); g.moveTo(x - r * .5, y - r * .2); g.lineTo(x + r * .5, y - r * .2); g.stroke();
+      g.restore();
+      hexRing(x, y, r * 1.25, k * .5, 1.5, rot, tint);
+      g.save(); g.globalAlpha = k * .8; g.fillStyle = tint; g.font = `${10 * dpr}px Silkscreen, monospace`; g.textAlign = 'center'; g.textBaseline = 'middle';
+      const tx = 'VACCINE · FIREWALL ONLINE · '; for (let i = 0; i < 48; i++) { const a = -rot + i * Math.PI / 24; g.save(); g.translate(x + Math.cos(a) * r * 1.35, y + Math.sin(a) * r * 1.35); g.rotate(a + Math.PI / 2); g.fillText(tx[i % tx.length], 0, 0); g.restore(); }
+      g.restore();
+    }
+
+    /* ---------- 속성 효과 (I: 세기 0.1 ~ 1.5 — 단계가 오를수록 수 · 크기 · 범위가 함께 커져요) ---------- */
+    const glowCache = {};
+    function glowDot(col) {
+      if (glowCache[col]) return glowCache[col];
+      const c = document.createElement('canvas'); c.width = c.height = 64; const q = c.getContext('2d');
+      const gr = q.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, '#ffffff'); gr.addColorStop(.28, col); gr.addColorStop(1, col + '00');
+      q.fillStyle = gr; q.fillRect(0, 0, 64, 64); return (glowCache[col] = c);
+    }
+    function zig(x1, y1, x2, y2, jit, segs) {
+      g.moveTo(x1, y1);
+      for (let i = 1; i < segs; i++) { const q = i / segs; g.lineTo(lerp(x1, x2, q) + (Math.random() - .5) * jit, lerp(y1, y2, q) + (Math.random() - .5) * jit); }
+      g.lineTo(x2, y2);
+    }
+    function elemFx(x, y, S, by, k, I) {
+      if (!ELD || k <= 0 || I <= 0) return;
+      const c1 = ELD.col, c2 = ELD.col2, N = Math.round(8 + 150 * I * I), spread = Math.min(W * 1.1, S * (.5 + 1.7 * I));
+      g.save(); g.globalCompositeOperation = 'lighter';
+      if (EL === 'fire') {
+        const hgt = S * (.45 + 1.7 * I);
+        for (let i = 0; i < N; i++) {
+          const q = (t * (.0004 + rndS(i, 31) * .0005) + rndS(i, 32)) % 1;
+          let bx = x + (rndS(i, 33) - .5) * spread * (1 - q * .45), byy = by;
+          if (I > .45 && i % 3 === 0) { const a = rndS(i, 34) * Math.PI * 2; bx = x + Math.cos(a) * S * .75; byy = by + Math.sin(a) * S * .14; }
+          const px = bx + Math.sin(t / 260 + i) * S * .03 * (1 + q), py = byy - q * hgt * (.5 + rndS(i, 35) * .6), s = S * (.06 + .13 * I) * (1 - q * .8) * (.6 + rndS(i, 36) * .8);
+          g.globalAlpha = k * (1 - q) * .85; g.drawImage(glowDot(q < .3 ? c2 : q < .65 ? c1 : '#ef4444'), px - s, py - s, s * 2, s * 2);
+        }
+        g.fillStyle = c2;
+        for (let i = 0; i < 6 + 70 * I; i++) { const q = (t * .00025 + rndS(i, 37)) % 1, px = x + (rndS(i, 38) - .5) * spread * 1.2 + Math.sin(t / 400 + i) * 20 * dpr, py = by - q * hgt * 1.5; g.globalAlpha = k * (1 - q); g.fillRect(px, py, 2.5 * dpr, 2.5 * dpr); }
+        if (I > .3) { const hg = g.createLinearGradient(0, H, 0, H * (1 - .35 * I)); hg.addColorStop(0, c1 + '88'); hg.addColorStop(1, c1 + '00'); g.globalAlpha = k * Math.min(1, I) * .7; g.fillStyle = hg; g.fillRect(0, H * (1 - .35 * I), W, H * .35 * I + 2); }
+      } else if (EL === 'water') {
+        const nr = 2 + Math.round(6 * I);
+        g.strokeStyle = c1; g.shadowColor = c1; g.shadowBlur = 12 * dpr;
+        for (let j = 0; j < nr; j++) { const q = (t * .00035 + j / nr) % 1, rx = S * (.25 + q * (.7 + 1.8 * I)); g.globalAlpha = k * (1 - q) * .8; g.lineWidth = (1 + 2.5 * I) * dpr * (1 - q * .6); g.beginPath(); g.ellipse(x, by, rx, rx * .2, 0, 0, Math.PI * 2); g.stroke(); }
+        g.shadowBlur = 0; g.lineWidth = 1.2 * dpr;
+        for (let i = 0; i < N; i++) {
+          const q = (t * (.00018 + rndS(i, 41) * .0002) + rndS(i, 42)) % 1, px = x + (rndS(i, 43) - .5) * spread * 1.3 + Math.sin(t / 500 + i) * 10 * dpr, py = lerp(by + S * .2, by - S * (.6 + 1.6 * I), q), r = (2 + rndS(i, 44) * 5) * dpr * (.7 + I);
+          g.globalAlpha = k * (1 - q) * .8; g.strokeStyle = c2; g.beginPath(); g.arc(px, py, r, 0, Math.PI * 2); g.stroke();
+          g.fillStyle = '#ffffff'; g.fillRect(px - r * .4, py - r * .5, 1.5 * dpr, 1.5 * dpr);
+        }
+        if (I > .3) for (let w = 0; w < 2; w++) {
+          const amp = S * .05 * I * (1 + w), top = H - H * (.06 + .2 * I) * (1 - w * .3);
+          g.globalAlpha = k * (.22 + .12 * w); g.fillStyle = w ? c2 + '55' : c1 + '66'; g.beginPath(); g.moveTo(0, H);
+          for (let px = 0; px <= W; px += 12 * dpr) g.lineTo(px, top + Math.sin(px / (60 * dpr) + t / (500 - w * 150) + w * 2) * amp);
+          g.lineTo(W, H); g.closePath(); g.fill();
+        }
+      } else if (EL === 'ice') {
+        g.strokeStyle = c2; g.lineWidth = 1.3 * dpr;
+        for (let i = 0; i < N; i++) {
+          const q = (t * (.00008 + rndS(i, 51) * .0001) + rndS(i, 52)) % 1, px = x + (rndS(i, 53) - .5) * Math.min(W, spread * 1.6) + Math.sin(t / 900 + i) * 16 * dpr, py = q * H, r = (3 + rndS(i, 54) * 6) * dpr * (.7 + I * .6), rot = t * .001 + i;
+          g.globalAlpha = k * .85; g.beginPath(); for (let a = 0; a < 3; a++) { const an = rot + a * Math.PI / 3; g.moveTo(px - Math.cos(an) * r, py - Math.sin(an) * r); g.lineTo(px + Math.cos(an) * r, py + Math.sin(an) * r); } g.stroke();
+        }
+        const ns = 3 + Math.round(18 * I);
+        for (let i = 0; i < ns; i++) {
+          const a = Math.PI + (i + .5) / ns * Math.PI, bx = x + Math.cos(a) * S * (.45 + .3 * rndS(i, 55)), byy = by + Math.abs(Math.sin(a)) * S * .05, L = S * (.12 + .55 * I) * (.5 + rndS(i, 56)), ang = -Math.PI / 2 + Math.cos(a) * .7, wd = L * .16;
+          const sg = g.createLinearGradient(bx, byy, bx + Math.cos(ang) * L, byy + Math.sin(ang) * L); sg.addColorStop(0, c1 + 'aa'); sg.addColorStop(1, '#ffffff');
+          g.globalAlpha = k * .75; g.fillStyle = sg; g.beginPath(); g.moveTo(bx - Math.sin(ang) * wd, byy + Math.cos(ang) * wd); g.lineTo(bx + Math.cos(ang) * L, byy + Math.sin(ang) * L); g.lineTo(bx + Math.sin(ang) * wd, byy - Math.cos(ang) * wd); g.closePath(); g.fill();
+        }
+        g.globalCompositeOperation = 'source-over';
+        const vg = g.createRadialGradient(W / 2, H / 2, Math.min(W, H) * .3, W / 2, H / 2, Math.max(W, H) * .75); vg.addColorStop(0, c2 + '00'); vg.addColorStop(1, c2 + '99');
+        g.globalAlpha = k * Math.min(1, I) * .6; g.fillStyle = vg; g.fillRect(0, 0, W, H);
+      } else if (EL === 'thunder') {
+        g.strokeStyle = '#ffffff'; g.shadowColor = c1; g.shadowBlur = 18 * dpr; g.lineJoin = 'round';
+        const na = 2 + Math.round(10 * I);
+        for (let i = 0; i < na; i++) { if (Math.random() > .5) continue; const a = Math.random() * Math.PI * 2, b2 = a + (Math.random() - .5) * 1.6, r = S * .5;
+          g.globalAlpha = k * (.5 + Math.random() * .5); g.lineWidth = (1 + 1.5 * I) * dpr; g.beginPath(); zig(x + Math.cos(a) * r, y + Math.sin(a) * r, x + Math.cos(b2) * r * 1.15, y + Math.sin(b2) * r * 1.15, S * .12, 6); g.stroke(); }
+        if (I > .2 && Math.random() < .03 + .3 * I) {
+          const tx = x + (Math.random() - .5) * spread, ty = y + (Math.random() - .3) * S * .4;
+          g.globalAlpha = k; g.lineWidth = (2 + 4 * I) * dpr; g.beginPath(); zig(tx + (Math.random() - .5) * W * .3, -10, tx, ty, S * .25, 12); g.stroke();
+          g.globalAlpha = k * .5; g.lineWidth = 1.5 * dpr; g.beginPath(); zig(tx, ty * .5, tx + (Math.random() - .5) * S, ty * .8, S * .15, 6); g.stroke();
+          g.globalCompositeOperation = 'source-over'; g.shadowBlur = 0; g.globalAlpha = k * .12 * I; g.fillStyle = c2; g.fillRect(0, 0, W, H); g.globalCompositeOperation = 'lighter';
+        }
+        g.shadowBlur = 0; g.fillStyle = c2;
+        for (let i = 0; i < N * .5; i++) { const q = (t * .002 + rndS(i, 61)) % 1, a = rndS(i, 62) * Math.PI * 2, d = S * (.35 + q * (.4 + I)); g.globalAlpha = k * (1 - q); g.fillRect(x + Math.cos(a) * d, y + Math.sin(a) * d, 2 * dpr, 2 * dpr); }
+      } else if (EL === 'plant') {
+        for (let i = 0; i < N; i++) {
+          const r = S * (.45 + rndS(i, 71) * (.4 + 1.1 * I)), a = rndS(i, 72) * Math.PI * 2 + t * (.0004 + rndS(i, 73) * .0006) * (i % 2 ? 1 : -1);
+          const px = x + Math.cos(a) * r, py = y + Math.sin(a) * r * .5 + Math.sin(t / 700 + i) * 8 * dpr, L = (5 + rndS(i, 74) * 7) * dpr * (.8 + I * .7);
+          g.save(); g.translate(px, py); g.rotate(a + t * .002); g.globalAlpha = k * .9; g.fillStyle = i % 4 === 0 ? c2 : i % 3 ? c1 : '#22c55e';
+          g.beginPath(); g.ellipse(0, 0, L, L * .42, 0, 0, Math.PI * 2); g.fill(); g.restore();
+        }
+        if (I > .25) {
+          const nv = 2 + Math.round(6 * I);
+          g.strokeStyle = '#22c55e'; g.lineWidth = (2 + 3 * I) * dpr; g.lineCap = 'round';
+          for (let v = 0; v < nv; v++) {
+            const sx = (v % 2 ? W : 0) + (v % 2 ? -1 : 1) * rndS(v, 75) * W * .1, sy = H, ex = lerp(sx, x, .55 + .2 * rndS(v, 76)), ey = lerp(H, by - S * .2, .4 + .4 * rndS(v, 77)), grow = Math.min(1, k * 1.2);
+            g.globalAlpha = k * .8; g.beginPath(); g.moveTo(sx, sy);
+            for (let s = 1; s <= 20 * grow; s++) { const q = s / 20; g.lineTo(lerp(sx, ex, q) + Math.sin(q * 9 + v) * 30 * dpr, lerp(sy, ey, q)); }
+            g.stroke();
+          }
+        }
+      } else if (EL === 'wind') {
+        g.lineCap = 'round';
+        for (let i = 0; i < N * .6; i++) {
+          const r = S * (.35 + rndS(i, 81) * (.5 + 1.5 * I)), a = rndS(i, 82) * Math.PI * 2 + t * (.002 + rndS(i, 83) * .002), len = .4 + rndS(i, 84) * .8, sq = .35 + rndS(i, 85) * .3, oy = (rndS(i, 86) - .5) * S * .8;
+          g.globalAlpha = k * (.35 + .5 * rndS(i, 87)); g.strokeStyle = i % 3 ? c1 : '#ffffff'; g.lineWidth = (1 + 2.5 * rndS(i, 88)) * dpr * (.8 + I * .5);
+          g.beginPath(); g.ellipse(x, y + oy, r, r * sq, 0, a, a + len); g.stroke();
+        }
+        if (I > .3) for (let i = 0; i < 10 + 30 * I; i++) { const q = (t * (.001 + rndS(i, 89) * .0015) + rndS(i, 90)) % 1, py = rndS(i, 91) * H, L = W * (.05 + .2 * rndS(i, 92)); g.globalAlpha = k * .4 * Math.sin(q * Math.PI); g.fillStyle = c2; g.fillRect(W - q * (W + L), py, L, 1.5 * dpr); }
+      } else if (EL === 'earth') {
+        g.globalCompositeOperation = 'source-over';
+        for (let i = 0; i < 5 + 70 * I * I; i++) {
+          const q = (t * (.00012 + rndS(i, 101) * .00015) + rndS(i, 102)) % 1, px = x + (rndS(i, 103) - .5) * spread * 1.3, py = by - q * S * (.6 + 1.6 * I), s = S * (.02 + .05 * rndS(i, 104)) * (.6 + I);
+          g.save(); g.translate(px, py); g.rotate(t * .001 * (rndS(i, 105) - .5) * 3 + i); g.globalAlpha = k * Math.sin(q * Math.PI) * .95; g.fillStyle = i % 3 ? '#8b5e34' : '#b07d4a'; g.strokeStyle = c1; g.lineWidth = 1 * dpr;
+          g.beginPath(); for (let v = 0; v < 6; v++) { const a = v / 6 * Math.PI * 2, rr = s * (.7 + .3 * rndS(i * 7 + v, 106)); g[v ? 'lineTo' : 'moveTo'](Math.cos(a) * rr, Math.sin(a) * rr); } g.closePath(); g.fill(); g.stroke(); g.restore();
+        }
+        g.globalCompositeOperation = 'lighter'; g.strokeStyle = c2; g.shadowColor = c2; g.shadowBlur = 14 * dpr; g.lineWidth = (1.5 + 2 * I) * dpr;
+        const nc = 3 + Math.round(12 * I);
+        for (let i = 0; i < nc; i++) {
+          const a = (i / nc) * Math.PI * 2, L = S * (.3 + 1.3 * I) * (.6 + .4 * rndS(i, 107)); let px = x, py = by;
+          g.globalAlpha = k * (.6 + .4 * Math.sin(t / 200 + i)); g.beginPath(); g.moveTo(px, py);
+          for (let s = 1; s <= 6; s++) { const d = L * s / 6, j = (rndS(i * 9 + s, 108) - .5) * L * .25; px = x + Math.cos(a) * d - Math.sin(a) * j; py = by + (Math.sin(a) * d + Math.cos(a) * j) * .25; g.lineTo(px, py); }
+          g.stroke();
+        }
+      } else if (EL === 'light') {
+        const nr = 6 + Math.round(18 * I), len = S * (.8 + 2.2 * I);
+        g.save(); g.translate(x, y); g.rotate(t * .00015);
+        const rg2 = g.createRadialGradient(0, 0, 0, 0, 0, len); rg2.addColorStop(0, '#ffffff'); rg2.addColorStop(.3, c1 + '88'); rg2.addColorStop(1, c1 + '00'); g.fillStyle = rg2;
+        for (let i = 0; i < nr; i++) { const a = i / nr * Math.PI * 2, w2 = Math.PI / nr * .35; g.globalAlpha = k * .35; g.beginPath(); g.moveTo(0, 0); g.arc(0, 0, len, a - w2, a + w2); g.closePath(); g.fill(); }
+        g.restore();
+        for (let i = 0; i < N; i++) { const q = (t * (.00015 + rndS(i, 111) * .0002) + rndS(i, 112)) % 1, px = x + (rndS(i, 113) - .5) * spread * 1.3, py = lerp(by, by - S * (.8 + 1.4 * I), q), s = (6 + rndS(i, 114) * 10) * dpr * (.7 + I * .6);
+          g.globalAlpha = k * Math.sin(q * Math.PI); g.drawImage(glowDot(i % 2 ? c1 : '#fff7d6'), px - s, py - s, s * 2, s * 2); }
+        for (let j = 0; j < 1 + Math.round(2 * I); j++) { const q = (t * .0003 + j / 3) % 1; ring(x, y, S * (.4 + q * (1 + I)), k * (1 - q) * .6, 2, c1); }
+      } else if (EL === 'dark') {
+        g.globalCompositeOperation = 'source-over';
+        const vg = g.createRadialGradient(W / 2, H / 2, Math.min(W, H) * .25, W / 2, H / 2, Math.max(W, H) * .75); vg.addColorStop(0, '#00000000'); vg.addColorStop(1, '#0a0012');
+        g.globalAlpha = k * Math.min(1, I) * .75; g.fillStyle = vg; g.fillRect(0, 0, W, H);
+        for (let i = 0; i < N; i++) {
+          const q = (t * (.00015 + rndS(i, 121) * .0002) + rndS(i, 122)) % 1, a = rndS(i, 123) * Math.PI * 2, d = S * (.3 + q * (.5 + 1.4 * I)), px = x + Math.cos(a) * d, py = y + Math.sin(a) * d * .7 - q * S * .5, s = S * (.06 + .12 * I) * (.5 + q);
+          g.globalAlpha = k * (1 - q) * .55; g.drawImage(glowDot('#1a0526'), px - s, py - s, s * 2, s * 2);
+        }
+        g.globalCompositeOperation = 'lighter';
+        for (let i = 0; i < N * .4; i++) { const q = (t * .0003 + rndS(i, 124)) % 1, px = x + (rndS(i, 125) - .5) * spread, py = by - q * S * (.5 + 1.2 * I), s = (4 + rndS(i, 126) * 6) * dpr; g.globalAlpha = k * (1 - q) * .8; g.drawImage(glowDot(i % 4 ? c1 : c2), px - s, py - s, s * 2, s * 2); }
+      } else if (EL === 'metal') {
+        const ng = 1 + Math.round(4 * I);
+        g.strokeStyle = c1; g.shadowColor = c1; g.shadowBlur = 10 * dpr; g.lineWidth = 2 * dpr;
+        for (let i = 0; i < ng; i++) {
+          const a = i / ng * Math.PI * 2 + .6, d = S * (.55 + .25 * I), gx = x + Math.cos(a) * d, gy = y + Math.sin(a) * d * .8, gr2 = S * (.1 + .12 * I) * (.7 + .5 * rndS(i, 131)), rot = t * .0008 * (i % 2 ? 1 : -1), teeth = 10;
+          g.globalAlpha = k * .55; g.beginPath();
+          for (let s = 0; s <= teeth * 2; s++) { const an = rot + s / (teeth * 2) * Math.PI * 2, rr = s % 2 ? gr2 : gr2 * 1.18; g.lineTo(gx + Math.cos(an) * rr, gy + Math.sin(an) * rr); }
+          g.closePath(); g.stroke(); g.beginPath(); g.arc(gx, gy, gr2 * .35, 0, Math.PI * 2); g.stroke();
+        }
+        g.shadowBlur = 0; const nt = 6 + Math.round(40 * I);
+        for (let i = 0; i < nt; i++) {
+          let px = x, py = y, dir = (rndS(i, 132) * 4) | 0; const segs = 5, segL = S * (.12 + .25 * I), pts2 = [[px, py]];
+          for (let s = 0; s < segs; s++) { if (s) dir = (dir + (rndS(i * 11 + s, 133) < .5 ? 1 : 3)) % 4; px += [1, 0, -1, 0][dir] * segL * (.5 + rndS(i * 5 + s, 134)); py += [0, 1, 0, -1][dir] * segL * (.5 + rndS(i * 5 + s, 135)); pts2.push([px, py]); }
+          g.globalAlpha = k * .3; g.strokeStyle = c1; g.lineWidth = 1 * dpr; g.beginPath(); pts2.forEach(([a2, b2], j) => g[j ? 'lineTo' : 'moveTo'](a2, b2)); g.stroke();
+          const q = (t * .0006 + rndS(i, 136)) % 1, f = q * segs, j2 = Math.min(segs - 1, f | 0), u = f - j2;
+          const hx = lerp(pts2[j2][0], pts2[j2 + 1][0], u), hy = lerp(pts2[j2][1], pts2[j2 + 1][1], u);
+          g.globalAlpha = k; g.drawImage(glowDot(c2), hx - 5 * dpr, hy - 5 * dpr, 10 * dpr, 10 * dpr);
+        }
+      }
+      g.restore();
+    }
+
+    /* ---------- 오버플로 (특별 진화): 오류 창이 쏟아지고, 화면 색이 뒤집혀요 ---------- */
+    function overflowFx(k) {
+      if (k <= 0) return;
+      const n = Math.min(16, Math.floor(k * 18));
+      g.save();
+      for (let i = 0; i < n; i++) {
+        const bw = Math.min(W * .42, 260 * dpr), bh = 74 * dpr, px = rndS(i, 141) * (W - bw), py = rndS(i, 142) * (H - bh) + Math.sin(t / 90 + i) * (i % 3 ? 0 : 3 * dpr);
+        g.globalAlpha = .92; g.fillStyle = '#0b0f1a'; g.fillRect(px, py, bw, bh);
+        g.fillStyle = i % 2 ? '#e11d48' : '#1d4ed8'; g.fillRect(px, py, bw, 16 * dpr);
+        g.strokeStyle = '#94a3b8'; g.lineWidth = 1 * dpr; g.strokeRect(px, py, bw, bh);
+        g.fillStyle = '#ffffff'; g.font = `${9 * dpr}px Silkscreen, monospace`; g.textAlign = 'left';
+        g.fillText(['SYSTEM ERROR', 'FATAL EXCEPTION', 'STACK OVERFLOW', 'MEMORY FAULT'][i % 4], px + 6 * dpr, py + 11 * dpr); g.fillText('×', px + bw - 12 * dpr, py + 11 * dpr);
+        g.fillStyle = '#fca5a5'; g.fillText('INTEGER OVERFLOW', px + 8 * dpr, py + 34 * dpr);
+        g.fillStyle = '#cbd5e1'; g.fillText(`×1024 LIMIT EXCEEDED @${ADDR}`, px + 8 * dpr, py + 50 * dpr);
+        g.fillText(`CODE 0x${byte(i, 1)}${byte(i, 2)}${byte(i, 3)}${byte(i, 4)}`, px + 8 * dpr, py + 64 * dpr);
+      }
+      g.restore();
+      if (Math.random() < .08 * k) { g.save(); g.globalCompositeOperation = 'difference'; g.fillStyle = '#ffffff'; g.fillRect(-60, -60, W + 120, H + 120); g.restore(); }
+      g.save(); g.globalAlpha = k * .25; g.fillStyle = '#ff1744';
+      for (let y = (t / 6) % (6 * dpr); y < H; y += 6 * dpr) g.fillRect(0, y, W, 1 * dpr);
+      g.restore();
+    }
+
+    /* ---------- 타락 (fall): 친구가 데이터 조각으로 흩어지고, 슬픔이 몸을 검게 물들여요 ---------- */
+    function fallPrologue(cx, cy, S) {
+      if (!fall || t >= PRE + 600) return;
+      const out = 1 - prog(t, PRE - 500, PRE + 500), friendName = fall.friend || '';
+      const fx = cx + S * .62, ax = lerp(cx - S * .45, cx, easeInOut(prog(t, 4200, 7600))), fy = cy;
+      // 친구: 처음엔 곁에 있다가 아래에서부터 데이터 조각으로 흩어져 사라져요
+      const del = prog(t, 1600, 5000);
+      sprite(F, fx, fy + Math.sin(t / 420) * 4 * dpr, S * .7, { a: out * (1 - prog(t, 4600, 5200)), white: .25 * del, glow: 18, clipTop: 1 - del });
+      if (F && del > 0) {
+        g.save(); g.globalCompositeOperation = 'lighter';
+        const st = Math.max(1, Math.floor(F.pts.length / 400)), s7 = S * .7;
+        for (let i = 0; i < F.pts.length; i += st) {
+          const q = F.pts[i], lineY = .5 - del * 1.05; if (q.y < lineY) continue;
+          const age = clamp((q.y - lineY) * 2.2), px = fx + q.x * s7 + Math.sin(i + t / 300) * age * 30 * dpr, py = fy + q.y * s7 - age * S * .9;
+          g.globalAlpha = out * (1 - age) * .9; g.fillStyle = age < .3 ? q.c : '#94a3b8'; g.fillRect(px, py, 2.6 * dpr, 2.6 * dpr);
+        }
+        g.restore();
+      }
+      // 파트너: 점점 검게 물들고, 검은 촉수가 다가와요
+      const dk = prog(t, 4200, PRE);
+      drawTendrils(dk * .5, out);
+      sprite(A, ax, cy + Math.sin(t / 380) * 5 * dpr, S, { a: out, glow: 20 });
+      corrupt(A, ax, cy, S, .7 * dk, 1);
+      if (dk > 0) { g.save(); g.globalAlpha = out * dk * .55; sprite(A, ax, cy, S, { black: true, a: out * dk * .55 }); g.restore(); }
+      // 심장 박동처럼 붉게 맥동하는 테두리
+      const beatK = Math.pow(Math.max(0, Math.sin(t / 260)), 8) * dk;
+      if (beatK > 0) { const vg = g.createRadialGradient(cx, cy, Math.min(W, H) * .25, cx, cy, Math.max(W, H) * .7); vg.addColorStop(0, '#00000000'); vg.addColorStop(1, '#ff0033'); g.save(); g.globalAlpha = out * beatK * .6; g.fillStyle = vg; g.fillRect(-60, -60, W + 120, H + 120); g.restore(); }
+      // 글자
+      g.save(); g.textAlign = 'center';
+      const lost = prog(t, 2400, 3000) * (1 - prog(t, 6200, 6800));
+      if (lost > 0) { g.globalAlpha = out * lost; g.font = `${14 * dpr}px Silkscreen, monospace`; g.fillStyle = '#f87171'; g.shadowColor = '#f43f5e'; g.shadowBlur = 14 * dpr;
+        g.fillText(`SIGNAL LOST · ${byte(3, 9)}${byte(5, 2)}`, fx, fy - S * .5); g.font = `${Math.min(26, W / dpr / 18) * dpr}px "Do Hyeon", sans-serif`; g.fillStyle = '#ffffff';
+        g.fillText(`${friendName}의 신호가 끊어졌어요`, cx, cy + S * .78); }
+      const sad = prog(t, 6400, 7000) * (1 - prog(t, PRE - 300, PRE + 200));
+      if (sad > 0) { g.globalAlpha = out * sad; g.font = `${Math.min(26, W / dpr / 18) * dpr}px "Do Hyeon", sans-serif`; g.fillStyle = '#fda4af'; g.shadowColor = '#a855f7'; g.shadowBlur = 20 * dpr;
+        g.fillText('슬픔이 마음을 검게 물들여요…', cx, cy + S * .78);
+        g.font = `${12 * dpr}px Silkscreen, monospace`; g.fillStyle = '#f43f5e'; g.fillText(`CORRUPTION ${Math.round(dk * 100)}%`, cx, cy + S * .78 + 26 * dpr); }
+      g.restore();
+      glitch(out * dk * .7);
+    }
+
     await new Promise(done => {
       function frame(now) {
         const dt = Math.min(64, now - last); last = now;
@@ -634,14 +979,14 @@
         if (!alive() || t >= T.end) return done();
         size();
         const cx = W / 2, cy = H * .42, S = Math.min(W * .58, H * .44), M = Math.max(W, H);
-        const fadeIn = prog(t, 0, T.in), fadeOut = 1 - prog(t, T.hold, T.end), A0 = fadeIn * fadeOut;
+        const fadeIn = prog(t, 0, BASE.in), enter = fall ? prog(t, PRE - 400, PRE + 400) : 1, fadeOut = 1 - prog(t, T.hold, T.end), A0 = fadeIn * fadeOut;
 
         // 박자: 흔들림 + 복제
         once('call', () => t >= T.call && shake(16, 320));
-        T.amp.forEach((b, i) => { if (t >= b && beatsDone <= i) { clone(b); mult *= 2; beatsDone = i + 1; shake(6 + i * 3, 220); } });
-        once('boom', () => { if (t >= T.boom) { shake(34, 900); burst = []; for (let i = 0; i < POWER.burst[PW]; i++) { const a = Math.random() * Math.PI * 2; burst.push({ a, v: (.5 + Math.random() * (1.4 + PW * .4)) * dpr, s: (1.5 + Math.random() * 3) * dpr, life: 1 }); } } });
+        T.amp.forEach((b, i) => { if (t >= b && beatsDone <= i) { beat(b, i); shake(i < T.nNormal ? 6 + i * 2.4 : 30 + (i - T.nNormal) * 4, i < T.nNormal ? 220 : 380); } });
+        once('boom', () => { if (t >= T.boom) { shake(34, 900); burst = []; for (let i = 0; i < LVL.burst[LV]; i++) { const a = Math.random() * Math.PI * 2; burst.push({ a, v: (.5 + Math.random() * (1.4 + Math.max(0, LV - 2) * .4)) * dpr, s: (1.5 + Math.random() * 3) * dpr, life: 1 }); } } });
         once('slamFx', () => { if (t >= T.slam) shake(22, 600); });
-        if (PW >= 4) once('boom2', () => { if (t >= T.boom + 380) { shake(30, 700); for (let i = 0; i < 260; i++) { const a = Math.random() * Math.PI * 2; burst.push({ a, v: (.8 + Math.random() * 2.6) * dpr, s: (2 + Math.random() * 3.5) * dpr, life: 1 }); } } });
+        if (LV >= 6) once('boom2', () => { if (t >= T.boom + 380) { shake(30, 700); for (let i = 0; i < 260; i++) { const a = Math.random() * Math.PI * 2; burst.push({ a, v: (.8 + Math.random() * 2.6) * dpr, s: (2 + Math.random() * 3.5) * dpr, life: 1 }); } } });
         let ox = 0, oy = 0;
         for (const s of shakes) { const q = 1 - (t - s.t0) / s.dur; if (q > 0) { ox += (Math.random() - .5) * 2 * s.amp * q * dpr; oy += (Math.random() - .5) * 2 * s.amp * q * dpr; } }
         if (reduce) ox = oy = 0;
@@ -676,10 +1021,14 @@
           const hk = A0 * (prog(t, T.scan, T.scan + 800) * (1 - .6 * prog(t, T.implode, T.boom)) + .7 * prog(t, T.rebuild, T.rebuilt));
           lightShafts(hk); featherFall(hk * (.35 + .65 * Math.max(ampP, result)));
         }
-        if (themeId === 'virus') drawTendrils(prog(t, T.scan, T.implode), A0 * (1 - .45 * prog(t, T.slam, T.slam + 1000)));
+        if (themeId === 'virus') drawTendrils(fall ? lerp(.5, 1, prog(t, T.scan, T.implode)) * enter : prog(t, T.scan, T.implode), A0 * (1 - .45 * prog(t, T.slam, T.slam + 1000)));
         infectK = themeId === 'virus' ? prog(t, T.scan, T.implode) : 0;
+        if (themeId === 'vaccine') purgeSweep(A0 * prog(t, T.scan, T.scan + 600) * (1 - prog(t, T.disEnd, T.amp0)) * .8, 2100);
+        fallPrologue(cx, cy, S);
+        // 새 모습의 속성 기운이 시작부터 희미하게 비쳐요
+        elemFx(cx, cy, S, cy + S * .5, A0 * enter * prog(t, T.call, T.scan) * (1 - prog(t, T.disEnd, T.amp0 + 1500)) * .5, EI * .3);
         // 네트워크 성좌 — 처음부터 끝까지 깔리고, 증폭 때는 모든 노드가 가운데로 데이터를 보내요
-        network(A0 * (.45 + .35 * ampP) * (1 - .6 * prog(t, T.implode, T.boom) * (1 - prog(t, T.boom, T.rebuilt))),
+        network(A0 * (.3 + .7 * enter) * (.45 + .35 * ampP) * (1 - .6 * prog(t, T.implode, T.boom) * (1 - prog(t, T.boom, T.rebuilt))),
                 ampP * (1 - prog(t, T.implode, T.boom)) + .5 * prog(t, T.rebuild, T.rebuilt) * (1 - prog(t, T.slam, T.slam + 900)), cx, cy, dt, sp);
 
         // 원근 격자 바닥 (스캔 ~ 증폭)
@@ -697,7 +1046,7 @@
                + prog(t, T.slam, T.slam + 60) * (1 - prog(t, T.slam + 200, T.slam + 700)) * .7) * A0);
 
         /* 1~3) 지금 모습 → 스캔 → 아래에서부터 입자로 분해 */
-        if (t < T.disEnd + 200) {
+        if (t < T.disEnd + 200 && enter > 0) {
           const disLine = 1 - prog(t, T.dis + 100, T.disEnd);
           const bob = Math.sin(t / 380) * 6 * dpr;
           const white = (themeId === 'virus' ? .12 : .55) * prog(t, T.scan, T.scanEnd);
@@ -705,8 +1054,12 @@
             const off = Math.min(W * .24, S * .85), s2 = S * .8;
             sprite(A, cx - off, cy + bob, s2, { a: fadeIn, white, glow: 24, clipTop: disLine });
             sprite(P, cx + off, cy - bob, s2, { a: fadeIn, white, glow: 24, clipTop: disLine });
-          } else sprite(A, cx, cy + bob, S, { a: fadeIn, white, glow: 24, clipTop: disLine });
-          if (themeId === 'virus') corrupt(A, cx, cy + bob, S, .75 * easeIn(prog(t, T.scan, T.disEnd)) + .08 * prog(t, T.scan, T.scan + 300), disLine);
+          } else sprite(A, cx, cy + bob, S, { a: fadeIn * enter, white, glow: 24, clipTop: disLine });
+          if (themeId === 'virus') corrupt(A, cx, cy + bob, S, Math.max(fall ? .7 : 0, .75 * easeIn(prog(t, T.scan, T.disEnd)) + .08 * prog(t, T.scan, T.scan + 300)), disLine);
+          if (themeId === 'vaccine') {
+            lockOn(cx, cy, partner ? S * 1.5 : S, A0 * prog(t, T.call, T.call + 600) * (1 - prog(t, T.disEnd - 600, T.disEnd + 200)), prog(t, T.call + 300, T.scanEnd));
+            firewall(cx, cy, S * .68, A0 * prog(t, T.scanEnd - 400, T.scanEnd + 400) * (1 - prog(t, T.disEnd - 300, T.disEnd + 200)) * .7, prog(t, T.scanEnd - 400, T.dis + 1200));
+          }
           const sc = prog(t, T.scan, T.scanEnd);
           if (sc > 0 && sc < 1) {
             const yy = cy - S * .55 + S * 1.1 * sc, half = S * (partner ? 1.4 : .75);
@@ -726,7 +1079,7 @@
         T.amp.forEach((b, i) => { const q = prog(t, b, b + 700); if (q > 0 && q < 1) { if (themeId === 'holy') ring(cx, cy, Rbase * (1 + q * 1.6), (1 - q) * A0, 4 - q * 3, i % 2 ? '#ffffff' : tint); else hexRing(cx, cy, Rbase * (1 + q * 1.6), (1 - q) * A0, 4 - q * 3, i * .3, i % 2 ? tint2 : tint); } });
 
         // 3단계부터: 구체에서 화면 끝으로 번개가 튀어요 (4단계는 더 자주, 더 굵게)
-        if (PW >= 3) { const lk = A0 * ampP * (1 - prog(t, T.implode, T.boom)); if (lk > 0) lightning(cx, cy, Rbase, M, lk, PW === 4 ? 4 : 2); }
+        if (LV >= 5) { const lk = A0 * ampP * (1 - prog(t, T.implode, T.boom)); if (lk > 0) lightning(cx, cy, Rbase, M, lk, LV >= 6 ? 4 : 2); }
         /* 4~6) 입자: 분해 → 소용돌이 구체 → 증폭 → 응축 → 대폭발 → 새 모습으로 재조립 */
         const boomK = easeOut(prog(t, T.boom, T.boom + 650));
         const settle = lerp(1.32, 1, easeOut(prog(t, T.rebuilt - 600, T.slam + 300)));
@@ -746,12 +1099,12 @@
             const vx = Math.cos(ang) * cl * R, vy = Math.sin(p.lat) * R * .9, depth = Math.sin(ang) * cl;
             let x, y, col, al = A0 * pa * (p.born ? clamp((t - p.born) / 250) : 1);
             if (t < T.boom) {
-              const k = easeInOut(prog(t, p.td, p.td + 900));
+              const k = easeInOut(prog(t, p.td, p.td + 1800));
               const hx = cx + (p.offX ? p.offX * Math.min(W * .24, S * .85) : 0) + p.ox * S * (partner ? .8 : 1);
               const hy = cy + p.oy * S * (partner ? .8 : 1);
               let sx = cx + vx, sy = cy + vy;
               if (themeId === 'jogress') {                 // 조그레스: 두 가닥 이중 나선 → 증폭 중반부터 구체로 합쳐져요
-                const m = easeInOut(prog(t, T.amp[1], T.amp[3])), u = p.lat / 1.4, an = u * 4.2 + spin * .003 + (p.offX < 0 ? 0 : Math.PI);
+                const m = easeInOut(prog(t, T.amp0 + 600, lerp(T.amp0, T.implode, .55))), u = p.lat / 1.4, an = u * 4.2 + spin * .003 + (p.offX < 0 ? 0 : Math.PI);
                 sx = lerp(cx + Math.cos(an) * S * .4 + (p.rr - .9) * S * .16 * Math.cos(p.a0), sx, m); sy = lerp(cy + u * S * .85 + (p.rr - .9) * S * .1 * Math.sin(p.a0), sy, m);
               }
               x = lerp(hx, sx, k); y = lerp(hy, sy, k) - Math.sin(k * Math.PI) * S * .25;
@@ -764,7 +1117,7 @@
               const bx = cx + ex * far, by = cy + ey * far;
               if (!rebuilding) { x = bx; y = by; col = themeId === 'free' ? p.hue : '#ffffff'; }
               else {
-                const k = easeInOut(prog(t, T.rebuild + p.st, T.rebuild + p.st + 1000));
+                const k = easeInOut(prog(t, T.rebuild + p.st * 2.6, T.rebuild + p.st * 2.6 + 2200));
                 x = lerp(bx, cx + p.hx * homeS, k); y = lerp(by, cy + p.hy * homeS, k);
                 col = k > .55 ? p.hc : (k > .2 ? tint2 : (themeId === 'free' ? p.hue : tint));
               }
@@ -777,20 +1130,43 @@
         }
 
         if (themeId === 'virus') darkCore(cx, cy, S * (.12 + .42 * ampP) * implodeK, A0 * prog(t, T.amp[0] - 700, T.amp[0]) * (1 - prog(t, T.boom - 60, T.boom)));
+        if (themeId === 'vaccine') {
+          const vk = A0 * prog(t, T.amp0 - 600, T.amp0) * (1 - prog(t, T.implode, T.boom));
+          firewall(cx, cy, Rbase * 1.15 * implodeK, vk, prog(t, T.amp0 - 600, T.implode - 600));
+          antibodies(cx, cy, Rbase * implodeK, vk, Math.round(6 + 34 * ampP));
+          if (t >= T.implode && t < T.boom) { g.save(); g.globalAlpha = A0 * prog(t, T.implode, T.implode + 200); g.textAlign = 'center'; g.fillStyle = '#ffffff'; g.shadowColor = tint; g.shadowBlur = 20 * dpr; g.font = `${14 * dpr}px Silkscreen, monospace`; g.fillText('FIREWALL LOCKED · INTEGRITY 100%', cx, cy - S * .7); g.restore(); }
+        }
+        // 속성 효과: 증폭되는 구체 둘레에서 박자마다 거세져요
+        elemFx(cx, cy, Math.max(S * .7, Rbase), cy + Math.max(S * .7, Rbase) * .55, A0 * prog(t, T.amp0 - 400, T.amp0 + 600) * (1 - prog(t, T.implode, T.boom)) * .75, EI * (.35 + .55 * ampP));
         if (themeId === 'capsule') {
           capsuleOrbit(cx, cy, Rbase * 1.3 * implodeK, A0 * prog(t, T.dis, T.amp[0]) * (1 - prog(t, T.implode, T.boom)), t * .0012, S);
           capsuleShell(cx, cy, S, M, A0);
         }
         // ×2 ×4 … 증폭 배율
+        const inOvf = OVER && t >= T.ovf0, ovfK = inOvf ? prog(t, T.ovf0, T.implode) * (1 - prog(t, T.boom, T.boom + 400)) : 0;
+        const garbage = () => OVF_GARBAGE[(t / 70 | 0) % OVF_GARBAGE.length];
+        const multTxt = !inOvf ? `×${mult}` : beatsDone >= T.amp.length && t > T.amp[T.amp.length - 1] + 500 ? garbage() : ovfTxt;
         if (t >= T.amp[0] - 200 && t < T.boom) {
-          const lastBeat = T.amp.filter(b => t >= b).pop();
-          if (lastBeat) {
-            const q = prog(t, lastBeat, lastBeat + 520);
-            g.save(); g.globalAlpha = (1 - q) * A0; g.textAlign = 'center'; g.fillStyle = '#ffffff'; g.shadowColor = tint; g.shadowBlur = 30 * dpr;
-            g.font = `${Math.round((60 + 90 * easeOut(q)) * dpr)}px Silkscreen, monospace`;
-            g.fillText(`×${mult}`, cx, cy + 30 * dpr);
-            g.font = `${12 * dpr}px Silkscreen, monospace`; g.globalAlpha = (1 - q) * A0 * .9;
-            g.fillText(`${TH.mult} ${ADDR} → ${'0x' + (hsh * mult >>> 0).toString(16).toUpperCase().padStart(8, '0').slice(-8)}`, cx, cy + 62 * dpr);
+          const bi = T.amp.filter(b => t >= b).length - 1, lastBeat = T.amp[bi];
+          if (bi >= 0) {
+            const q = prog(t, lastBeat, lastBeat + 520), after = inOvf && t > T.amp[T.amp.length - 1] + 500;
+            g.save(); g.globalAlpha = (after ? .9 : 1 - q) * A0; g.textAlign = 'center'; g.fillStyle = '#ffffff'; g.shadowColor = inOvf ? '#ff1744' : tint; g.shadowBlur = 30 * dpr;
+            const fs = Math.round((inOvf ? 70 + 50 * easeOut(q) : 60 + 90 * easeOut(q)) * dpr);
+            g.font = `${fs}px Silkscreen, monospace`;
+            if (inOvf) {                                         // 넘쳐흐른 숫자: 색이 갈라지고 흔들려요
+              const jx = (Math.random() - .5) * 14 * dpr * (1 + ovfK), jy = (Math.random() - .5) * 8 * dpr;
+              g.globalCompositeOperation = 'lighter'; g.shadowBlur = 0;
+              g.fillStyle = '#ff1744'; g.fillText(multTxt, cx + jx - 6 * dpr, cy + 30 * dpr + jy);
+              g.fillStyle = '#00e5ff'; g.fillText(multTxt, cx + jx + 6 * dpr, cy + 30 * dpr - jy);
+              g.globalCompositeOperation = 'source-over'; g.fillStyle = '#ffffff'; g.fillText(multTxt, cx + jx, cy + 30 * dpr);
+              if ((t / 180 | 0) % 2) { g.font = `${Math.min(46, W / dpr / 9) * dpr}px Silkscreen, monospace`; g.fillStyle = '#ff1744'; g.shadowColor = '#ff1744'; g.shadowBlur = 24 * dpr; g.fillText('OVERFLOW', cx, cy - S * .55); }
+              g.font = `${12 * dpr}px Silkscreen, monospace`; g.fillStyle = '#fca5a5'; g.shadowBlur = 0;
+              g.fillText(`${TH.mult} ${ADDR} → 0x${byte(1, t | 0)}${byte(2, t | 0)}${byte(3, t | 0)}${byte(4, t | 0)}  INT32 LIMIT EXCEEDED`, cx, cy + 62 * dpr + fs * .2);
+            } else {
+              g.fillText(multTxt, cx, cy + 30 * dpr);
+              g.font = `${12 * dpr}px Silkscreen, monospace`; g.globalAlpha = (1 - q) * A0 * .9;
+              g.fillText(`${TH.mult} ${ADDR} → ${'0x' + (hsh * mult >>> 0).toString(16).toUpperCase().padStart(8, '0').slice(-8)}`, cx, cy + 62 * dpr);
+            }
             g.restore();
           }
         }
@@ -802,16 +1178,19 @@
           const x0 = 22 * dpr; let y0 = 40 * dpr;
           g.font = `${11 * dpr}px Silkscreen, monospace`; g.fillText(`DIGITAL DATA AMPLIFIER · ${ADDR}`, x0, y0);
           g.fillStyle = '#ffffff'; g.font = `${26 * dpr}px Silkscreen, monospace`; y0 += 34 * dpr;
-          const HW = TH.hud; g.fillText(t < T.dis ? HW[0] : t < T.amp[0] ? HW[1] : t < T.implode ? `${HW[2]} ×${mult}` : t < T.boom ? HW[3] : HW[4], x0, y0);
+          const HW = TH.hud; g.fillText(t < T.dis ? HW[0] : t < T.amp[0] ? HW[1] : inOvf && t < T.boom ? 'OVERFLOW' : t < T.implode ? `${HW[2]} ${multTxt}` : t < T.boom ? HW[3] : HW[4], x0, y0);
           g.font = `${13 * dpr}px Silkscreen, monospace`; y0 += 26 * dpr; g.fillStyle = '#cbd5e1';
-          g.fillText(`CAPACITY  ${fmtMB(capNow)}`, x0, y0); y0 += 19 * dpr;
-          g.fillText(`PACKETS   ${(baseCount * mult).toLocaleString()}`, x0, y0); y0 += 19 * dpr;
+          g.fillText(`CAPACITY  ${inOvf && t < T.boom ? garbage().replace('×', '') + ' TB' : fmtMB(capNow)}`, x0, y0); y0 += 19 * dpr;
+          g.fillText(`PACKETS   ${inOvf && t < T.boom ? (Math.random() < .5 ? '-2,147,483,648' : 'NaN') : (baseCount * mult).toLocaleString()}`, x0, y0); y0 += 19 * dpr;
+          if (ELD) { g.fillStyle = ELD.col; g.fillText(`ELEMENT   ${ELD.name}`, x0, y0); y0 += 19 * dpr; g.fillStyle = '#cbd5e1'; }
           g.fillText(`ROUTES    ${Math.round(nodes.length * (1 + ampP * 3))}`, x0, y0); y0 += 19 * dpr;
           const syncP = Math.round(100 * prog(t, T.scan, T.rebuilt));
           g.fillText(`SYNC      ${syncP}%`, x0, y0); y0 += 12 * dpr;
           g.fillStyle = 'rgba(255,255,255,.15)'; g.fillRect(x0, y0, 200 * dpr, 5 * dpr);
           g.fillStyle = tint; g.fillRect(x0, y0, 200 * dpr * syncP / 100, 5 * dpr);
           if (themeId === 'virus' && (t / 260 | 0) % 2) { g.font = `${13 * dpr}px Silkscreen, monospace`; g.fillStyle = '#ff4d6d'; g.fillText(`WARNING  CORRUPTION ${Math.round(infectK * 100)}%`, x0, y0 + 26 * dpr); }
+          if (themeId === 'vaccine') { g.font = `${13 * dpr}px Silkscreen, monospace`; g.fillStyle = '#86efac'; g.fillText(`SECURE   THREAT 0 · INTEGRITY ${Math.round(60 + 40 * prog(t, T.scan, T.implode))}%`, x0, y0 + 26 * dpr); }
+          if (inOvf && (t / 140 | 0) % 2) { g.font = `${13 * dpr}px Silkscreen, monospace`; g.fillStyle = '#ff1744'; g.fillText('FATAL  INTEGER OVERFLOW · 0x80000000', x0, y0 + 46 * dpr); }
           g.restore();
         }
 
@@ -823,10 +1202,11 @@
           g.globalAlpha = A0; g.fillStyle = og; g.beginPath(); g.arc(cx, cy, r * 2, 0, Math.PI * 2); g.fill(); g.globalAlpha = 1;
         }
         if (t >= T.boom) {
-          for (let i = 0, nr = POWER.rings[PW]; i < nr; i++) {
+          for (let i = 0, nr = LVL.rings[LV]; i < nr; i++) {
             const q = prog(t, T.boom + i * 120, T.boom + 1100 + i * 120), r = M * .9 * easeOut(q), a = (1 - q) * .9 * fadeOut, w = Math.max(1.5, 7 - i * .8);
-            if (i % 2) hexRing(cx, cy, r, a, w, i * .2, '#ffffff'); else ring(cx, cy, r, a, w, PW >= 4 ? `hsl(${(i * 52 + t * .2) % 360},95%,70%)` : tint);
+            if (i % 2) hexRing(cx, cy, r, a, w, i * .2, '#ffffff'); else ring(cx, cy, r, a, w, LV >= 6 ? `hsl(${(i * 52 + t * .2) % 360},95%,70%)` : tint);
           }
+          if (ELD) for (let i = 0; i < 1 + Math.round(EI * 3); i++) { const q = prog(t, T.boom + 60 + i * 160, T.boom + 1600 + i * 160); if (q > 0 && q < 1) ring(cx, cy, M * (.2 + .9 * EI) * easeOut(q), (1 - q) * fadeOut, (3 + 8 * EI) * (1 - q), ELD.col); }
           g.save(); g.globalCompositeOperation = 'lighter';
           for (const b of burst) {
             b.life -= dt * .0008 * sp; if (b.life <= 0) continue;
@@ -844,10 +1224,14 @@
         const footY = by + sprS * .47;
         if (t >= T.rebuild) {
           const dk = A0 * result;
-          if (PW >= 3) godRays(cx, by, M * .75, dk * (PW === 4 ? .26 : .17), t * (PW === 4 ? .00018 : .0001), PW === 4 ? 24 : 14);
+          if (LV >= 5) godRays(cx, by, M * .75, dk * (LV >= 6 ? .26 : .17), t * (LV >= 6 ? .00018 : .0001), LV >= 6 ? 24 : 14);
           pillar(cx, footY, Math.min(W * .5, S * 1.1), dk * .8);
           disk(cx, footY, Math.min(W * .46, S * 1.5), dk, t * .0006);
           if (themeId === 'holy') sacredCircle(cx, by, sprS * .62, dk * .45, t * .00025);
+          if (themeId === 'vaccine') shieldEmblem(cx, by, sprS * .62 * (1 + .25 * (1 - easeOut(prog(t, T.slam, T.slam + 900)))), dk * (.35 + .4 * prog(t, T.slam, T.slam + 600)), t * .0002);
+          // 속성 효과: 새 모습이 드러나는 순간 가장 거세게 터졌다가 조금 가라앉아요
+          const surge = t >= T.slam ? 1 + .7 * (1 - easeOut(prog(t, T.slam, T.slam + 2600))) : .6 + .4 * prog(t, T.rebuilt - 1500, T.slam);
+          elemFx(cx, by, sprS, footY, A0 * prog(t, T.rebuild + 1500, T.rebuilt), EI * surge);
           if (themeId === 'jogress') { hexRing(cx, by, sprS * .6, dk * .5, 1.5, t * .0005, '#f472b6'); hexRing(cx, by, sprS * .54, dk * .5, 1.5, -t * .0005, '#38bdf8'); }
         }
         if (t >= T.solid) {
@@ -865,12 +1249,12 @@
         else if (t >= T.boom + 70 && t < T.boom + 150) { g.fillStyle = themeId === 'virus' ? '#3b0014' : '#fff'; g.fillRect(-60, -60, W + 120, H + 120); sprite(B, cx, cy, S * 1.3, { black: true }); }
         const fl = t < T.boom + 150 ? 0 : 1 - prog(t, T.boom + 150, T.boom + 700);
         if (fl > 0) { g.fillStyle = `rgba(${FLASH},${fl})`; g.fillRect(-60, -60, W + 120, H + 120); }
-        if (PW >= 4) { const f2 = t >= T.boom + 380 ? .8 * (1 - prog(t, T.boom + 380, T.boom + 820)) : 0; if (f2 > 0) { g.fillStyle = `rgba(${FLASH},${f2})`; g.fillRect(-60, -60, W + 120, H + 120); }
+        if (LV >= 6) { const f2 = t >= T.boom + 380 ? .8 * (1 - prog(t, T.boom + 380, T.boom + 820)) : 0; if (f2 > 0) { g.fillStyle = `rgba(${FLASH},${f2})`; g.fillRect(-60, -60, W + 120, H + 120); }
           for (let i = 0; i < 3; i++) { const q = prog(t, T.boom + 380 + i * 110, T.boom + 1500 + i * 110); if (q > 0 && q < 1) hexRing(cx, cy, M * easeOut(q), (1 - q) * .8 * fadeOut, 5 - i, -i * .3, `hsl(${(i * 90 + t * .3) % 360},95%,70%)`); } }
         const sfl = t >= T.slam ? .55 * (1 - prog(t, T.slam, T.slam + 260)) : 0;
         if (sfl > 0) { g.fillStyle = `rgba(${FLASH},${sfl})`; g.fillRect(-60, -60, W + 120, H + 120); }
 
-        if (PW >= 4 && t >= T.slam) sparkles(cx, by, S, fadeOut * prog(t, T.slam, T.slam + 600), t);
+        if (LV >= 6 && t >= T.slam) sparkles(cx, by, S, fadeOut * prog(t, T.slam, T.slam + 600), t);
         if (t >= T.slam) {
           const rA = fadeOut, vw = W / dpr;
           // 화면 테두리 HUD
@@ -888,8 +1272,9 @@
             g.shadowBlur = 0; g.font = `${10 * dpr}px Silkscreen, monospace`; g.fillStyle = '#94a3b8';
             const subs = [`${kind} COMPLETE  ·  NODE ${ADDR}  ·  LINK ESTABLISHED`, `${kind} COMPLETE  ·  ${ADDR}`, `${kind} COMPLETE`];
             g.fillText(subs.find(x => g.measureText(x).width < W - 60 * dpr) || subs[2], cx, ty + 20 * dpr);
-            g.font = `${14 * dpr}px sans-serif`; g.fillStyle = PW >= 4 ? `hsl(${t * .15 % 360},95%,72%)` : tint; g.shadowColor = tint; g.shadowBlur = 10 * dpr;
-            g.fillText(POWER.stars[PW], cx, ty + 42 * dpr);
+            g.font = `${14 * dpr}px sans-serif`; g.fillStyle = LV >= 6 ? `hsl(${t * .15 % 360},95%,72%)` : tint; g.shadowColor = tint; g.shadowBlur = 10 * dpr;
+            g.fillText(starsOf(LV), cx, ty + 42 * dpr);
+            if (ELD) { g.font = `${10 * dpr}px Silkscreen, monospace`; g.fillStyle = ELD.col; g.shadowColor = ELD.col; g.fillText(`ELEMENT · ${ELD.name}`, cx, ty + 60 * dpr); }
             g.restore();
           }
           // 이름
@@ -944,6 +1329,7 @@
           const hA = prog(t, T.slam + 2200, T.slam + 2700) * fadeOut;
           if (hA > 0) { g.globalAlpha = hA * (.5 + .3 * Math.sin(t / 300)); g.fillStyle = '#94a3b8'; g.font = `${11 * dpr}px Silkscreen, monospace`; g.textAlign = 'right'; g.fillText('TAP TO CONTINUE ▸', W - 30 * dpr, H - 30 * dpr); g.globalAlpha = 1; }
         }
+        if (inOvf) { overflowFx(ovfK * A0); glitch(Math.min(1, .3 + ovfK) * A0); }
         if (themeId === 'virus') glitch(A0 * (ampP * .45 * (1 - prog(t, T.boom, T.rebuild)) + prog(t, T.boom, T.boom + 100) * (1 - prog(t, T.boom + 600, T.rebuilt)) * .9 + .1 * prog(t, T.slam, T.slam + 300)));
         requestAnimationFrame(frame);
       }

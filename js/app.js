@@ -158,7 +158,7 @@ let lastRes = null, J = null;
 
 /* 체급: 같은 이름 + 같은 단계면 언제나 같은 용량 */
 function capacity(name, stage){
-  const [lo, hi, unit] = JD.capacity[Math.min(stage, JD.capacity.length - 1)];
+  const [lo, hi, unit] = stage < 0 ? JD.babyCapacity[Math.max(0, stage + 2)] : JD.capacity[Math.min(stage, JD.capacity.length - 1)];
   const v = lo + (hash(name + '#' + stage) % 1000) / 1000 * (hi - lo);
   return (v >= 10 ? Math.round(v) : v.toFixed(1)) + unit;
 }
@@ -175,8 +175,8 @@ const randInt = ([lo, hi]) => lo + Math.floor(Math.random() * (hi - lo + 1));
 const byName = (map, name) => { for (const k in map) if (name.includes(k)) return map[k]; return null; };
 const fill = (t, net, mon) => t.replace('{net}', net).replace('{mon}', mon).replace('{을}', eul(mon)).replace('{과}', wa(mon)).replace('{이}', ga(mon));
 const wildOf = net => (byName(JD.wildBy, net) || JD.wild).filter(m => m !== J.form && m !== J.dg.ko);
-// 디지몬의 단계: 도감 등급으로 (유년기 -1 · 성장기 0 · 성숙기/아머체 1 · 완전체/하이브리드체 2 · 궁극체 3)
-const LEVEL_STAGE = [[/유년기|유아기/, -1], [/성장기/, 0], [/성숙기|아머체/, 1], [/완전체|하이브리드체/, 2], [/궁극체/, 3]];
+// 디지몬의 단계: 도감 등급으로 (유아기 -2 · 유년기 -1 · 성장기 0 · 성숙기/아머체 1 · 완전체/하이브리드체 2 · 궁극체 3)
+const LEVEL_STAGE = [[/유아기/, -2], [/유년기/, -1], [/성장기/, 0], [/성숙기|아머체/, 1], [/완전체|하이브리드체/, 2], [/궁극체/, 3]];
 const stageOfMon = name => { const lv = ((window.digiData && window.digiData(name)) || {}).level || ''; const m = LEVEL_STAGE.find(([re]) => re.test(lv)); return m ? m[1] : null; };
 let stageBuckets = null;   // 도감 전체를 단계별로 (그 구역에 알맞은 상대가 없을 때 빌려 와요)
 const bucketOf = st => {
@@ -198,7 +198,8 @@ function monFor(ev, mons){
   return low.length ? pickFrom(low) : pickFrom(mons.filter(m => st(m) !== null && st(m) <= J.stage)) || pickFrom(mons);
 }
 const fxChips = fx => fx ? Object.entries(fx).map(([k, v]) => `<i class="t-${k}">${JD.traits[k]} +${v}</i>`).join('') : '';
-const stageLabel = st => JD.stageNames[Math.min(st, 3)];
+const stageLabel = st => st < 0 ? JD.babyNames[Math.max(0, st + 2)] : JD.stageNames[Math.min(st, 3)];
+const needOf = k => k < 0 ? JD.babyNeed[k + 2] : JD.evolveNeed[k];   // 다음 단계로 진화하는 조건 (유아기 · 유년기 포함)
 const picOf = name => window.digiImage(name);
 // 디지몬 설명: 진화형은 js/digi-info.js, 성장기 파트너는 data.js 의 d. 'X'·' 솔라 모드'는 기본 형태 설명에 한 줄 더해요
 function infoOf(name){
@@ -235,7 +236,7 @@ const bondChip = b => b && b.d ? `<i class="t-bond${b.d < 0 ? ' neg' : ''}">♥ 
 // 여러 개면 jogress 표(대표 조합) → 대표 진화 → 운명적으로 하나. 같은 모습이면 언제나 같은 짝이에요
 const jogCache = new Map();
 function jogPair(){
-  if (!J || J.special) return null;
+  if (!J || J.special || J.stage < 0) return null;
   const key = J.dg.en + '|' + J.form;
   if (jogCache.has(key)) return jogCache.get(key);
   const fixed = JD.jogress.find(j => j.a === J.form);
@@ -346,7 +347,7 @@ async function stepEvent(region){
   if (r() < rate('rare')) { const ev = pickFrom(JD.rares); return simpleEvent(ev, 'rare', net, monFor(ev, mons)); }
   // 5) 디지멘탈 캡슐 발견 (성장기 · 성숙기)
   // 지금 모습이 그 디지멘탈로 아머진화한다는 근거(Wikimon 진화 후 목록)가 있을 때만 나와요
-  const armors = J.special || J.capsuled || J.stage > 1 ? [] : armorEdges().filter(d => !d.rare || r() < .15);
+  const armors = J.special || J.capsuled || J.stage > 1 || J.stage < 0 ? [] : armorEdges().filter(d => !d.rare || r() < .15);
   if (armors.length && r() < rate('capsule')) {
     const dm = pickFrom(armors);
     mark('luck'); log(`${net}에서 빛나는 「${dm.name}의 디지멘탈」 캡슐을 발견했어요.`, 'luck');
@@ -357,6 +358,9 @@ async function stepEvent(region){
   }
   // 6) 위기 (어두운 구역에서 더 자주)
   if (r() < rate('danger') * (isDarkNet(net) ? 1.5 : 1)) {
+    // 친구를 잃는 슬픔: 타락할 모습이 있는 백신종이면, 친밀도 높은 친구가 이 위기에서 사라질 수 있어요
+    const fallen = fallForm(), lost = fallen ? Object.entries(J.bonds).filter(([n, v]) => v >= JD.bondLoss.min && n !== J.form && !(jg && n === jg.b)) : [];
+    if (lost.length && r() < JD.bondLoss.chance) return bondLoss(region, pickFrom(lost)[0], fallen);
     const d = pickFrom(JD.dangers), mon = monFor(d, mons);
     if (d.fork) return forkEvent(d, 'danger', region, mon);
     return simpleEvent(d, 'danger', net, mon);
@@ -384,12 +388,50 @@ async function stepEvent(region){
   const bd = addBond(mon, ev.fx && ev.fx.dark ? JD.bond.roamDark : JD.bond.roam);
   mark('daily'); log(fill(ev.t, net, mon), '', fx, null, bd); J.log[J.log.length - 1].src = ev; bondUp(bd);
 }
+/* ---------- 친구를 잃는 슬픔 → 타락 진화 ----------
+   백신종이고, 진화 데이터에 근거가 있는 어두운 모습(같은 단계)이나 어비스의 타락 표에 오른 모습이 있을 때만 일어나요 */
+function fallForm(){
+  if (!J || J.stage < 0 || attrOf(J.form) !== 'vac') return null;
+  const abyss = JD.secrets.find(d => d.fall), fixed = abyss && abyss.fall[J.form];
+  if (fixed && window.digiImage(fixed)) return { n: fixed, src: evoSrc(J.form, fixed) };
+  const dark = lateralForms().filter(e => e.dark);
+  return dark.find(e => e.main) || dark[0] || null;
+}
+async function bondLoss(region, friend, fallen){
+  const L = JD.bondLoss, me = J, fx = { dark: 30 };
+  delete J.bonds[friend]; J.lost = (J.lost || []).concat(friend);
+  addTraits(fx); const c = addCond(-20);
+  mark('danger'); log(fill(pickFrom(L.texts), region.name, friend), 'danger', fx, friend, null, c);
+  if (!(await sleep(2800, me))) return;
+  log(fill(L.after, region.name, friend), 'danger');
+  if (!(await sleep(2000, me))) return;
+  const evo = { name: fallen.n, stage: J.stage, label: `${J.special ? J.label : stageLabel(J.stage)} · 타락 진화`, path: `${friend}${eul(friend)} 잃은 슬픔으로 타락`, src: fallen.src, attr: attrOf(fallen.n), fall: { friend } };
+  await playEvolution(evo, 'DARK EVOLUTION');
+}
 function addTraits(fx){ if (fx) for (const [k, v] of Object.entries(fx)) J.traits[k] = Math.min(JD.statMax, J.traits[k] + v); }
 
+// 파트너의 어린 모습: 도감의 진화 데이터를 거꾸로 따라가 [유아기, 유년기]를 찾아요 (대표 진화 줄을 먼저, 여럿이면 파트너마다 운명적으로 하나)
+function babyLine(dg){
+  const DB = window.DIGI_DB || {}, me = (window.digiData && window.digiData(dg.ko)) || {}, name = me.name || dg.ko;
+  const parentsOf = (child, re) => {
+    const out = [];
+    for (const [n, row] of Object.entries(DB)) {
+      if (!re.test(row[1] || '') || /크로스워즈/.test(row[1]) || !row[0]) continue;
+      const e = (row[6] || []).find(x => x[0] === child);
+      // 점수: 대표 진화 줄 → 원조 육성기(Digital Monster) → 다른 육성기 → 게임 순
+      if (e && soloEdge(e)) out.push({ n, sc: (e[1] ? 4 : 0) + (/^Digital Monster/.test(e[2] || '') ? 2 : /Pendulum|D-3|D-Ark|D-Power|Digivice|Accel|Vital/.test(e[2] || '') ? 1 : 0) });
+    }
+    out.sort((a, b) => b.sc - a.sc || hash(dg.en + a.n) - hash(dg.en + b.n));
+    return out.map(o => o.n);
+  };
+  for (const kid of parentsOf(name, /유년기/)) { const egg = parentsOf(kid, /유아기/)[0]; if (egg) return [egg, kid]; }
+  return null;
+}
 function startJourney(){
-  const dg = lastRes.dg;
-  J = { dg, stage: 0, form: dg.ko, label: stageLabel(0), moves: 0, exp: 0, ended: false,
-        route: [{ form: dg.ko, stage: 0, label: stageLabel(0), cap: capacity(dg.ko, 0), regions: [], path: '시작' }],
+  const dg = lastRes.dg, baby = babyLine(dg);
+  const st0 = baby ? -2 : 0, f0 = baby ? baby[0] : dg.ko;
+  J = { dg, stage: st0, form: f0, label: stageLabel(st0), moves: 0, exp: 0, ended: false, baby: baby || [],
+        route: [{ form: f0, stage: st0, label: stageLabel(st0), cap: capacity(f0, st0), regions: [], path: '시작' }],
         visited: new Set([NET.currentRegion()]), recent: [], special: null, branch: null, capsuled: false, jogressed: false, bonds: {}, jogPartner: null,
         cond: JD.cond.start, focus: savedFocus(), map: [], count: {}, choices: 0, pending: [], world: null, lastJog: -99,
         busy: false, choosing: false, traits: Object.fromEntries(TRAITS.map(t => [t, 0])), log: [] };
@@ -419,7 +461,8 @@ function pickDirection(){
     J.focus = b.dataset.f; try { localStorage.setItem('digi-focus', J.focus); } catch (er) {}
     hideCard(); $('journey').hidden = false; requestAnimationFrame(updateInset); renderJourney();
     const f = JD.focus[J.focus], ko = J.dg.ko;
-    log(`${ko}${wa(ko)} 「${f.name}」 방향으로 여행을 떠나요. ${f.desc}. 가고 싶은 네트워크 구역을 눌러 보세요. 마우스 휠로 지도를 확대·축소할 수 있어요.`, 'sys');
+    const young = J.stage < 0 ? ` 아직은 ${stageLabel(J.stage)} 모습인 ${J.form}${ro(J.form)} 시작해서, 유년기를 거쳐 ${ko}${ro(ko)} 자라요.` : '';
+    log(`${ko}${wa(ko)} 「${f.name}」 방향으로 여행을 떠나요. ${f.desc}.${young} 가고 싶은 네트워크 구역을 눌러 보세요. 마우스 휠로 지도를 확대·축소할 수 있어요.`, 'sys');
     idleStatus();
   };
 }
@@ -489,6 +532,8 @@ function traitOfEvo(name, k){
   return m ? m[1] : TRAITS[hash(name) % 4];
 }
 function evoCandidates(k){
+  // 유아기 · 유년기: 정해진 한 줄 (유아기 → 유년기 → 파트너 성장기)
+  if (k < 0) { const n = k === -2 ? J.baby[1] : J.dg.ko; return n ? [{ name: n, stage: k + 1, path: '성장', attr: k === -1 ? attrOf(n) : 'fre', baby: true }] : []; }
   const t = J.traits, order = [...TRAITS].sort((a, b) => t[b] - t[a]), top = order[0], gap = t[top] - t[order[1]];
   const want = wantAttr(), natural = J.dg.vibe.map(v => JD.natural[v]);
   const balanced = gap < JD.balanceGap && top !== 'dark';
@@ -523,8 +568,9 @@ function applyEvolution(evo){
   J.route.push({ form: evo.name, stage: evo.stage, label: J.label, cap: evo.cap || evoCapacity(evo), regions: [], special: evo.special, path: evo.path, src: evo.src });
 }
 async function playEvolution(evo, kind = 'EVOLUTION'){
-  const me = J, cap = evo.cap = evoCapacity(evo), from = J.form;
-  await window.evoCinematic.play({ from, to: evo.name, partner: evo.partner, desc: infoOf(evo.name), kind, attr: attrOf(evo.name), fromCap: capacity(from, J.stage), label: [evo.label || evo.special || stageLabel(evo.stage), ATTR[attrOf(evo.name)][0]].join(' · '), cap, power: evo.special ? 4 : kind === 'CAPSULE EVOLUTION' ? 2 : evo.stage, alive: () => J === me });
+  const me = J, cap = evo.cap = evoCapacity(evo), from = J.form, baby = evo.stage < 0;
+  const lbl = evo.label || evo.special || stageLabel(evo.stage);
+  await window.evoCinematic.play({ from, to: evo.name, partner: evo.partner, desc: infoOf(evo.name), kind, attr: baby ? '' : attrOf(evo.name), fromCap: capacity(from, J.stage), label: baby ? lbl : [lbl, ATTR[attrOf(evo.name)][0]].join(' · '), cap, stage: evo.special ? 4 : evo.stage, fall: evo.fall || null, alive: () => J === me });
   if (J !== me) return;
   await NET.evolveFx({ label: evo.name, img: null, sub: `${kind} · ${evo.label || evo.special || stageLabel(evo.stage)} · ${cap}`, title: `${from}${ga(from)} ${evo.name}${ro(evo.name)} 진화!` });
   if (J !== me) return;
@@ -537,7 +583,7 @@ const statTop = () => Math.max(...TRAITS.map(t => J.traits[t]));
 const statSum = () => TRAITS.reduce((m, t) => m + J.traits[t], 0);
 const evoReady = need => J.exp >= need.steps && statTop() >= need.top && statSum() >= need.total;
 async function maybeEvolve(){
-  const k = J.stage, need = !J.special && JD.evolveNeed[k];
+  const k = J.stage, need = !J.special && needOf(k);
   if (need && evoReady(need) && J.cond >= JD.cond.evolveMin) { const evo = decideEvolution(k); if (evo) { await playEvolution(evo); return; } }
   // 같은 단계 안에서 이어지는 진화 (모드 체인지 · 암흑진화 · 그 밖의 근거 있는 진화)
   const lat = lateralEvolution();
@@ -645,7 +691,7 @@ async function travel(region){
   if (region === -2) { log('아직 신호가 닿지 않는 구역이에요.', 'sys'); return; }
   if (region < 0 || !NET.isOpen(region)) return;
   const me = J, secret = NET.isSecretRegion(region), finale = NET.regionName(region) === JD.horizon.region;
-  const evo = secret && !finale ? specialEvolution(secretDef(NET.regionName(region))) : null;
+  const evo = secret && !finale && J.stage >= 0 ? specialEvolution(secretDef(NET.regionName(region))) : null;
   const opts = {};
   if (evo) window.evoCinematic.preload(evo.name);
   J.busy = true; NET.hover = -1; $('journey').classList.add('busy');
@@ -670,7 +716,7 @@ async function travel(region){
   }
   if (evo) {
     const from = J.form, fromCap = J.route[J.route.length - 1].cap; evo.cap = evoCapacity(evo);
-    await window.evoCinematic.play({ from, to: evo.name, desc: infoOf(evo.name), kind: 'SPECIAL EVOLUTION', attr: attrOf(evo.name), label: evo.special, cap: evo.cap, fromCap, power: 4, alive: () => J === me });
+    await window.evoCinematic.play({ from, to: evo.name, desc: infoOf(evo.name), kind: 'SPECIAL EVOLUTION', attr: attrOf(evo.name), label: evo.special, cap: evo.cap, fromCap, stage: 4, alive: () => J === me });
     if (J !== me) return;
     applyEvolution(evo); if (J.exp) J.map[J.exp - 1] = 'evo';
     log(`${from}${ga(from)} ${evo.name}${ro(evo.name)} 진화했어요! (${evo.special} · ${evo.cap})`, 'evo sp', null, evo.name);
@@ -861,7 +907,7 @@ function renderJourney(){
   $('jLog').innerHTML = J.log.slice(-6).map(l => `<li class="${l.cls}">${esc(l.text)}${chipsOf(l.fx, l.bond, l.cond) ? ' ' + chipsOf(l.fx, l.bond, l.cond) : ''}</li>`).join('');
   $('jLog').scrollTop = $('jLog').scrollHeight;
   $('jProg').style.width = Math.min(100, J.exp / JD.journeyEnd * 100) + '%';
-  const nx = J.special ? null : JD.evolveNeed[J.stage];
+  const nx = J.special ? null : needOf(J.stage);
   const found = JD.secrets.filter(d => NET.unlocked.has(NET.regionId(d.region)));
   const cands = nx ? evoCandidates(J.stage) : [];
   const pred = cands.length ? `<div class="j-pred"><span class="jp-h">다음 진화 예상${cands.length > 1 ? ` · ${cands.length}개 중 하나` : ''}<em>${esc(cands[0].path)}</em></span><div class="jp-list">${cands.slice(0, 6).map(c => `<span class="jp" title="아직 알 수 없는 디지몬">${silTag(c.name)}<b>???</b><i class="${ATTR[c.attr][1]}">${ATTR[c.attr][0]}</i></span>`).join('')}</div></div>` : '';
@@ -931,7 +977,7 @@ netc.addEventListener('pointermove', e => { if (J && !J.busy && card.hidden && !
 netc.addEventListener('pointerleave', () => { NET.hover = -1; });
 netc.addEventListener('click', e => { if (J && !J.busy && !NET.pinching) travel(NET.regionAt(e.clientX, e.clientY)); });
 // 개발용: 주소 끝에 #debug를 붙이면 콘솔에서 __digi.travel(구역번호)로 이동을, __digi.evolve({name, stage, label, partner}, 'JOGRESS EVOLUTION')로 진화 연출을 시험할 수 있어요
-if (location.hash === '#debug') window.__digi = { map: journeyMap, bond: (n, v) => { J.bonds[n] = v; renderJourney(); }, travel, evolve: playEvolution, candidates: k => evoCandidates(k ?? J.stage), lateral: () => lateralForms(), latEvo: () => lateralEvolution(), jog: () => jogPair(), armors: () => armorEdges(), special: name => specialEvolution(secretDef(name)), render: () => renderJourney(), net: NET, get journey(){ return J; } };
+if (location.hash === '#debug') window.__digi = { map: journeyMap, bond: (n, v) => { J.bonds[n] = v; renderJourney(); }, travel, evolve: playEvolution, candidates: k => evoCandidates(k ?? J.stage), lateral: () => lateralForms(), latEvo: () => lateralEvolution(), jog: () => jogPair(), armors: () => armorEdges(), special: name => specialEvolution(secretDef(name)), fallForm: () => fallForm(), loss: friend => bondLoss({ name: NET.regionName(NET.currentRegion()) || 'DEEP WEB' }, friend, fallForm()), baby: dg => babyLine(dg || J.dg), render: () => renderJourney(), net: NET, get journey(){ return J; } };
 $('jEnd').addEventListener('click', () => showLog());
 $('jFocus').addEventListener('click', e => {
   const b = e.target.closest('[data-f]'); if (!b || !J || b.dataset.f === J.focus) return;
