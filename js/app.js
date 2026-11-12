@@ -248,7 +248,8 @@ function jogPair(){
     const here = Math.min(J.stage, 3), opts = [];
     for (const e of d.evolvesTo) {
       const [n, main, src, , w] = e, rs = stageOfMon(n);
-      if (!w || !w.length || rs === null || rs < here || rs > J.stage + 1 || /(X항체)/.test(n) || !window.digiImage(n)) continue;
+      // 혼자서도 같은 모습으로 진화할 수 있는 줄은 빼요: 짝과 합체했는데 그냥 진화와 같으면 의미가 없으니까요
+      if (soloEdge(e) || !w || !w.length || rs === null || rs < here || rs > J.stage + 1 || /(X항체)/.test(n) || !window.digiImage(n)) continue;
       const mates = w.filter(m => window.digiImage(m) && stageOfMon(m) !== null);
       if (mates.length) opts.push({ a: J.form, b: mates[hash(key + n) % mates.length], result: n, stage: rs, main, src });
     }
@@ -536,7 +537,8 @@ const evoSrc = (from, to) => (evoEdge(from, to) || [])[2] || '';
 // 아머체(캡슐진화)·하이브리드체·X항체 모습은 따로 다루니 빼요. 근거 없는 진화는 하지 않아요.
 function nextForms(k){
   const d = window.digiData && window.digiData(J.form); if (!d) return [];
-  const seen = new Set();
+  // 대표 조그레스(jogress 표)의 결과는 짝과 함께할 때만: 그냥 진화 후보에서는 빼요
+  const seen = new Set(JD.jogress.filter(j => j.a === J.form).map(j => j.result));
   return d.evolvesTo.filter(([n]) => { const lv = (window.digiData(n) || {}).level || '';
     if (seen.has(n) || n === d.name || !soloEdge(d.evolvesTo.find(e => e[0] === n)) || /아머체|하이브리드체/.test(lv) || /(X항체)/.test(n) || stageOfMon(n) !== k + 1 || !window.digiImage(n)) return false;
     seen.add(n); return true; }).map(([n, main, src]) => ({ n, main: !!main, src }));
