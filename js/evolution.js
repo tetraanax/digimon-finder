@@ -91,7 +91,7 @@
     vaccine: { tint: '#f8fafc', tint2: '#fbbf24', title: 'SANCTIFIED', hud: ['THREAT SCAN', 'SANCTIFY', 'PURIFY', 'HOLY AEGIS', 'DESCEND'], mult: 'PURIFY', rain: '248,250,252', flash: '255,252,240', bg: '7,8,16' },
     free:    { tint: '#34d399', title: 'FREE FORM',        hud: ['SCANNING', 'DECOMPILE', 'AMPLIFY', 'LIMIT BREAK', 'RECOMPILE'], mult: 'EXPAND', rain: '167,243,208' },
     capsule: { tint: '#facc15', tint2: '#fde68a', title: 'CAPSULE UNLOCKED', hud: ['SCANNING', 'DECOMPILE', 'AMPLIFY', 'LIMIT BREAK', 'ARMOR LOCK'], mult: 'EXPAND', rain: '253,224,71', flash: '255,247,214' },
-    spirit:  { tint: '#fb923c', tint2: '#fde68a', title: 'SPIRIT EVOLUTION', hud: ['SCANNING', 'SPIRIT LINK', 'RESONATE', 'H-SPIRIT', 'DESCEND'], mult: 'RESONATE', rain: '253,186,116', flash: '255,240,220' },
+    spirit:  { tint: '#fb923c', tint2: '#fde68a', title: 'SPIRIT EVOLUTION', hud: ['CODE SCAN', 'SPIRIT LINK', 'RESONATE', 'H-SPIRIT', 'DESCEND'], mult: 'RESONATE', rain: '253,186,116', flash: '255,240,220' },
     jogress: { tint: '#f472b6', tint2: '#38bdf8', title: 'DNA SYNCHRONIZED', hud: ['SCANNING', 'DNA SPLIT', 'SYNC', 'FUSION', 'RECOMPILE'], mult: 'SYNC', rain: '249,168,212' },
   };
   function pickTheme(kind, attr, label) {
@@ -679,6 +679,36 @@
       g.restore();
     }
     // 백신: 머리 위 광륜
+    // 스피릿: 몸을 둘러싸고 도는 바코드 고리 — 원통에 감긴 세로 막대처럼 그려요.
+    // 앞쪽 반(side 'front')은 밝고 굵게, 뒤쪽 반('back')은 흐리게: 디지몬보다 먼저 뒤쪽, 나중에 앞쪽을 그려 몸을 감싼 것처럼 보여요
+    const BARS = (() => { let s = (hsh % 2147483646) + 1; const r = () => (s = (s * 16807) % 2147483647) / 2147483647, out = [];
+      for (let i = 0; i < 96; i++) out.push(r() < .6 ? (r() < .55 ? 1 : r() < .6 ? 2 : 3) : 0);
+      return out; })();
+    function barcodeRing(x, y, R, tilt, h, k, rot, side) {
+      if (k <= 0 || R <= 2 || h <= 0) return;
+      const n = BARS.length, step = Math.PI * 2 / n, u = R * step * .55, front = side === 'front';
+      g.save(); g.globalCompositeOperation = 'lighter';
+      for (let i = 0; i < n; i++) {
+        const w = BARS[i]; if (!w) continue;
+        const a = rot + i * step, s = Math.sin(a); if ((s > 0) !== front) continue;
+        const px = x + Math.cos(a) * R, py = y + s * R * tilt, bw = Math.max(.7 * dpr, u * w * Math.abs(s));
+        g.globalAlpha = clamp(k * (front ? .5 + .5 * s : .14 - .08 * s));
+        g.fillStyle = front && w === 3 ? '#ffffff' : tint;
+        g.fillRect(px - bw / 2, py - h / 2, bw, h);
+      }
+      // 위아래 가는 테 (반쪽 타원)
+      const a0 = front ? 0 : Math.PI;
+      g.globalAlpha = clamp(k * (front ? .8 : .25)); g.strokeStyle = tint2; g.lineWidth = 1.2 * dpr; g.beginPath();
+      g.ellipse(x, y - h * .62, R, R * tilt, 0, a0, a0 + Math.PI); g.moveTo(x + (front ? R : -R), y + h * .62); g.ellipse(x, y + h * .62, R, R * tilt, 0, a0, a0 + Math.PI); g.stroke();
+      g.restore();
+    }
+    // 바코드 고리 여러 줄: 세로로 쌓고(gap), 줄마다 반대로 돌아요. 구 모양(sphere)이면 위아래 줄은 반지름이 줄어요
+    function barcodeStack(x, y, R, h, k, spin, side, rows = 3, gap = .3, sphere = false) {
+      for (let j = 0; j < rows; j++) {
+        const o = j - (rows - 1) / 2, oy = o * R * gap, rr = sphere ? R * Math.sqrt(Math.max(.15, 1 - (o * gap) ** 2)) : R;
+        barcodeRing(x, y + oy, rr, .2, h, k, spin * (j % 2 ? -1.35 : 1) + j * 1.7, side);
+      }
+    }
     function halo(x, y, w, k) {
       if (k <= 0) return;
       g.save(); g.globalAlpha = k; g.strokeStyle = '#fff7d6'; g.lineWidth = 4 * dpr; g.shadowColor = tint; g.shadowBlur = 26 * dpr;
@@ -687,28 +717,38 @@
       g.restore();
     }
 
-    // 백신: 엔젤링 — 비스듬히 누운 빛의 고리. 뒤쪽 반은 흐리게, 앞쪽 반은 흰빛으로 또렷하게, 금빛 테두리와 고리를 도는 반짝임
+    // 백신: 엔젤링 — 가는 금빛 이중 고리. 굵은 띠 대신 얇은 선 두 줄과 옅은 빛 번짐으로 은은하게,
+    // 앞쪽 반은 또렷하고 뒤쪽 반은 희미하게, 반짝임 하나가 고리를 따라 흐르고 빛가루가 조금씩 떨어져요
     function angelRing(x, y, w, k, ph = 0) {
       if (k <= 0 || w <= 1) return;
-      const h = w * .26, lw = Math.max(2, w * .09);
-      g.save(); g.globalCompositeOperation = 'lighter';
-      const glow = g.createRadialGradient(x, y, 0, x, y, w * 1.5); glow.addColorStop(0, `rgba(${FLASH},.28)`); glow.addColorStop(.6, tint2 + '18'); glow.addColorStop(1, tint2 + '00');
-      g.globalAlpha = clamp(k); g.fillStyle = glow; g.beginPath(); g.ellipse(x, y, w * 1.5, h * 2.6, 0, 0, Math.PI * 2); g.fill();
-      // 고리 자체는 덧칠하지 않고 그려요: 밝은 빛 속에서도 금빛 테가 묻히지 않게
+      const h = w * .2, lw = Math.max(1.1 * dpr, w * .032), a = clamp(k), TAU = Math.PI * 2;
+      const ring = (rw, rh, a0 = 0, a1 = TAU) => { g.beginPath(); g.ellipse(x, y, rw, rh, 0, a0, a1); g.stroke(); };
+      g.save(); g.lineCap = 'round';
+      // 빛 번짐: 흐림 처리 없이 굵고 아주 옅은 선 두 겹
+      g.globalCompositeOperation = 'lighter'; g.strokeStyle = tint2;
+      g.globalAlpha = a * .07; g.lineWidth = lw * 7; ring(w, h);
+      g.globalAlpha = a * .13; g.lineWidth = lw * 3; ring(w, h);
+      // 고리 본체: 가장자리는 깊은 금색, 가운데로 갈수록 밝은 상아색 (밝은 배경에서도 묻히지 않게 덧칠하지 않아요)
       g.globalCompositeOperation = 'source-over';
-      g.shadowColor = tint2; g.shadowBlur = Math.min(w * .35, 18 * dpr);
-      g.globalAlpha = clamp(k) * .45; g.strokeStyle = tint2; g.lineWidth = lw * 1.6; g.beginPath(); g.ellipse(x, y, w, h, 0, Math.PI, Math.PI * 2); g.stroke();   // 뒤쪽 반
-      g.globalAlpha = clamp(k) * .9; g.shadowBlur = 0; g.lineWidth = lw * 2.3; g.strokeStyle = '#b45309'; g.beginPath(); g.ellipse(x, y, w, h, 0, 0, Math.PI * 2); g.stroke();   // 진한 호박색 바깥 테: 밝은 빛 속에서도 고리 모양이 보여요
-      g.shadowBlur = Math.min(w * .35, 18 * dpr);
-      g.globalAlpha = clamp(k); g.lineWidth = lw * 1.7; g.strokeStyle = tint2; g.beginPath(); g.ellipse(x, y, w, h, 0, 0, Math.PI * 2); g.stroke();                  // 금빛 테
-      g.shadowColor = '#ffffff'; g.lineWidth = lw; g.strokeStyle = '#ffffff'; g.beginPath(); g.ellipse(x, y, w, h, 0, 0, Math.PI); g.stroke();                 // 앞쪽 흰 고리
-      g.globalAlpha = clamp(k) * .8; g.lineWidth = lw * .55; g.beginPath(); g.ellipse(x, y, w, h, 0, Math.PI, Math.PI * 2); g.stroke();
-      g.shadowBlur = 0;
-      for (let i = 0; i < 4; i++) {                                            // 고리를 따라 도는 반짝임
-        const a = t * .0016 + ph + i * Math.PI / 2, sx = x + Math.cos(a) * w, sy = y + Math.sin(a) * h, front = Math.sin(a) > 0 ? 1 : .35, s = lw * (1.6 + .8 * Math.sin(t * .01 + i));
-        g.globalAlpha = clamp(k) * front; g.fillStyle = '#ffffff';
-        g.beginPath(); g.moveTo(sx, sy - s * 2); g.lineTo(sx + s * .35, sy); g.lineTo(sx, sy + s * 2); g.lineTo(sx - s * .35, sy); g.closePath(); g.fill();
-        g.beginPath(); g.moveTo(sx - s * 2, sy); g.lineTo(sx, sy + s * .35); g.lineTo(sx + s * 2, sy); g.lineTo(sx, sy - s * .35); g.closePath(); g.fill();
+      const gr = g.createLinearGradient(x - w, 0, x + w, 0);
+      gr.addColorStop(0, '#9a6b1f'); gr.addColorStop(.3, '#d9a93f'); gr.addColorStop(.5, '#fff4d1'); gr.addColorStop(.7, '#d9a93f'); gr.addColorStop(1, '#9a6b1f');
+      g.strokeStyle = gr;
+      g.globalAlpha = a * .38; g.lineWidth = lw * .7; ring(w, h, Math.PI, TAU); ring(w * .92, h * .88, Math.PI, TAU);   // 뒤쪽 반
+      g.globalAlpha = a; g.lineWidth = lw; ring(w, h, 0, Math.PI);                                                      // 앞쪽 바깥 선
+      g.globalAlpha = a * .75; g.lineWidth = lw * .45; ring(w * .92, h * .88, 0, Math.PI);                              // 앞쪽 안쪽 선
+      g.globalAlpha = a * .9; g.strokeStyle = '#ffffff'; g.lineWidth = lw * .35; ring(w, h, Math.PI * .3, Math.PI * .7); // 앞쪽 가운데 하이라이트
+      // 고리를 따라 흐르는 반짝임 하나 (앞쪽에서만 밝게) + 가는 십자 빛
+      const ang = t * .0011 + ph * 2.1, s = Math.sin(ang), gx = x + Math.cos(ang) * w, gy = y + s * h, ga = a * (s > 0 ? .4 + .6 * s : .15);
+      g.globalCompositeOperation = 'lighter';
+      const dot = glowDot('#fff4d1'), ds = lw * 9;
+      g.globalAlpha = ga; g.drawImage(dot, gx - ds / 2, gy - ds / 2, ds, ds);
+      g.strokeStyle = '#ffffff'; g.lineWidth = Math.max(.8 * dpr, lw * .3); g.globalAlpha = ga * .9;
+      g.beginPath(); g.moveTo(gx - lw * 4.5, gy); g.lineTo(gx + lw * 4.5, gy); g.moveTo(gx, gy - lw * 3); g.lineTo(gx, gy + lw * 3); g.stroke();
+      // 고리에서 떨어지는 빛가루
+      g.fillStyle = '#fff4d1';
+      for (let i = 0; i < 7; i++) {
+        const q = (t * .00035 + i / 7 + ph * .37) % 1, mx = x + Math.cos(i * 2.39 + ph) * w * .85, my = y + Math.abs(Math.sin(i * 2.39 + ph)) * h + q * w * .8, ms = Math.max(1, lw * .55);
+        g.globalAlpha = a * (1 - q) * .55; g.fillRect(mx - ms / 2, my - ms / 2, ms, ms);
       }
       g.restore();
     }
@@ -1255,6 +1295,16 @@
                + prog(t, T.boom, T.boom + 60) * (1 - prog(t, T.boom + 300, T.rebuild + 400)) * .9
                + prog(t, T.slam, T.slam + 60) * (1 - prog(t, T.slam + 200, T.slam + 700)) * .7) * A0);
 
+        // 스피릿: 바코드 고리가 아래에서 차례로 올라와 몸을 감싸고 돌다가, 분해가 시작되면 가운데로 조여들어요
+        const spA = themeId === 'spirit' && t < T.disEnd + 300 ? (side => {
+          const sq = 1 - .55 * easeIn(prog(t, T.dis, T.disEnd)), spin = t * .0016 * (1 + 2 * prog(t, T.scan, T.disEnd));
+          for (let j = 0; j < 3; j++) {
+            const e = easeOut(prog(t, T.call + j * 260, T.call + 900 + j * 260)), k = A0 * enter * e * (1 - prog(t, T.disEnd - 300, T.disEnd + 300));
+            const yy = cy + ((j - 1) * S * .3 + (1 - e) * S * .7) * sq;
+            barcodeRing(cx, yy, S * .44 * sq * (1 + .5 * (1 - e)), .2, S * .085, k, spin * (j % 2 ? -1.35 : 1) + j * 1.7, side);
+          }
+        }) : null;
+        if (spA) spA('back');
         /* 1~3) 지금 모습 → 스캔 → 아래에서부터 입자로 분해 */
         if (t < T.disEnd + 200 && enter > 0) {
           const disLine = 1 - prog(t, T.dis + 100, T.disEnd);
@@ -1287,6 +1337,7 @@
           }
         }
 
+        if (spA) spA('front');
         /* 확장 · 증폭: 큰 육각 프레임이 돌고, 박자마다 육각 파동이 퍼져요 */
         // 심장박동: 배수가 오를 때마다 쿵-쿵! 두 번 뛰고, 두 번째 박동이 숫자가 바뀌는 순간과 겹쳐요 (박자가 빨라질수록 촘촘해져요)
         let heart = 0;
@@ -1307,6 +1358,10 @@
 
         // 3단계부터: 구체에서 화면 끝으로 번개가 튀어요 (4단계는 더 자주, 더 굵게)
         if (LV >= 5) { const lk = A0 * ampP * (1 - prog(t, T.implode, T.boom)); if (lk > 0) lightning(cx, cy, Rbase, M, lk, LV >= 6 ? 4 : 2); }
+        // 스피릿: 증폭되는 구체를 바코드 고리 세 줄이 감고, 증폭될수록 빨리 돌아요 (응축 때 함께 빨려 들어가요)
+        const spB = themeId === 'spirit' ? A0 * prog(t, T.amp0 - 700, T.amp0) * (1 - prog(t, T.implode + 200, T.boom)) : 0;
+        const spBR = Math.max(S * .5, Rbase * 1.08) * implodeK, spBspin = t * .0016 * (1 + 3 * ampP);
+        if (spB > 0) barcodeStack(cx, cy, spBR, Math.max(S * .05, spBR * .12), spB * (.8 + .2 * heart), spBspin, 'back', 3, .38, true);
         /* 4~6) 입자: 분해 → 소용돌이 구체 → 증폭 → 응축 → 대폭발 → 새 모습으로 재조립 */
         const boomK = easeOut(prog(t, T.boom, T.boom + 650));
         const settle = lerp(1.32, 1, easeOut(prog(t, T.rebuilt - 600, T.slam + 300)));
@@ -1356,6 +1411,7 @@
           g.restore();
         }
 
+        if (spB > 0) barcodeStack(cx, cy, spBR, Math.max(S * .05, spBR * .12), spB * (.8 + .2 * heart), spBspin, 'front', 3, .38, true);
         if (themeId === 'virus') darkCore(cx, cy, S * (.12 + .42 * ampP) * implodeK, A0 * prog(t, T.amp[0] - 700, T.amp[0]) * (1 - prog(t, T.boom - 60, T.boom)));
         if (themeId === 'vaccine') {
           const vk = A0 * prog(t, T.amp0 - 600, T.amp0) * (1 - prog(t, T.implode, T.boom));
@@ -1484,6 +1540,13 @@
           elemFx(cx, by, sprS, footY, A0 * prog(t, T.rebuild + 1500, T.rebuilt), EI * surge);
           if (themeId === 'jogress') { hexRing(cx, by, sprS * .6, dk * .5, 1.5, t * .0005, '#f472b6'); hexRing(cx, by, sprS * .54, dk * .5, 1.5, -t * .0005, '#38bdf8'); }
         }
+        // 스피릿: 새 모습을 감싸고 돌던 바코드 고리가 드러나는 순간 위로 풀려 올라가며 흩어지고, 발밑에 한 줄이 천천히 남아요
+        const spC = themeId === 'spirit' && t >= T.rebuilt - 400 ? (side => {
+          const up = easeIn(prog(t, T.slam, T.slam + 1800)), k = fadeOut * prog(t, T.rebuilt - 400, T.rebuilt + 400) * (1 - prog(t, T.slam + 900, T.slam + 1800));
+          barcodeStack(cx, by - up * sprS * .7, sprS * .46 * (1 + .45 * up), sprS * .07, k, t * .0018, side, 3, .3);
+          barcodeRing(cx, by + sprS * .47, sprS * .5, .2, sprS * .035, fadeOut * prog(t, T.slam + 1200, T.slam + 2200) * .55, t * .0006, side);
+        }) : null;
+        if (spC) spC('back');
         if (t >= T.solid) {
           const sA = (themeId === 'capsule' ? prog(t, T.slam, T.slam + 140) : prog(t, T.solid, T.slam)) * fadeOut;
           const punch = t >= T.slam ? 1 + .1 * (1 - easeOut(prog(t, T.slam, T.slam + 380))) : 1;
@@ -1497,6 +1560,7 @@
           ring(cx, by, S * (.3 + rp * 1.1), (1 - rp) * .7 * fadeOut, 2);
         }
 
+        if (spC) spC('front');
         // 임팩트 프레임 + 섬광
         if (t >= T.boom && t < T.boom + 70) { g.fillStyle = '#000'; g.fillRect(-60, -60, W + 120, H + 120); }
         else if (t >= T.boom + 70 && t < T.boom + 150) { g.fillStyle = themeId === 'virus' ? '#3b0014' : '#fff'; g.fillRect(-60, -60, W + 120, H + 120); sprite(B, cx, cy, S * 1.3, { black: true }); }

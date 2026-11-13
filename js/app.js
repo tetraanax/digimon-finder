@@ -623,6 +623,7 @@ function spiritCandidates(k){
   const l = J.spiritLine; if (!l) return null;
   if (J.form === l.h && l.b && soloOK(l.h, l.b)) return [{ name: l.b, stage: k + 1, label: '비스트 스피릿', path: `${l.spirit}의 비스트 스피릿`, attr: attrOf(l.b), kind: SPIRIT }];
   if (J.form === l.b && l.f && (soloOK(l.b, l.f) || soloOK(l.h, l.f))) return [{ name: l.f, stage: k + 1, label: '융합 진화', path: `${l.spirit}의 휴먼 · 비스트 스피릿 융합`, attr: attrOf(l.f), kind: SPIRIT }];
+  if (J.form === l.b && !l.f && l.a && (soloOK(l.b, l.a) || soloOK(l.h, l.a))) return [{ name: l.a, stage: k + 1, label: '고대 투사', path: `${l.spirit}의 스피릿이 고대의 모습으로`, attr: attrOf(l.a), kind: SPIRIT }];
   return null;
 }
 function decideEvolution(k){
