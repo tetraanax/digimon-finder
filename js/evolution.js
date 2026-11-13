@@ -40,6 +40,7 @@
   }
   let T = makeT(1, 0);
   let MAX_PARTS = 5200;
+  let QUAL = 1;                    // 렌더 해상도 배율: 프레임이 계속 늦으면 스스로 낮춰요 (다음 진화에도 이어져요)
   // 단계별 세기 (index = LV: 1 유년기 · 2 성장기 · 3 성숙기 · 4 완전체 · 5 궁극체 · 6 특별)
   const LVL = {
     parts: [0, 700, 1000, 1500, 2800, 4400, 6400],
@@ -328,7 +329,7 @@
       for (let k = 0; k < Math.min(90, links.length * 2); k++) { const l = links[k % links.length]; packets.push({ a: l[0], b: l[1], p: rnd(), v: .0004 + rnd() * .0008 }); }
     }
     function size() {
-      dpr = Math.min(devicePixelRatio || 1, 2);
+      dpr = Math.min(devicePixelRatio || 1, 1.5) * QUAL;
       const w = Math.round(innerWidth * dpr), h = Math.round(innerHeight * dpr);
       if (w === W && h === H) return;
       W = cv.width = w; H = cv.height = h;
@@ -341,6 +342,21 @@
     const HEX = '0123456789ABCDEF';
     const byte = (k, c) => HEX[(k * 7 + c + (t / 90 | 0)) % 16] + HEX[(k * 13 + c * 3 + (t / 140 | 0)) % 16];
     let hsh = 0; for (const ch of String(to)) hsh = (hsh * 31 + ch.charCodeAt(0)) >>> 0;
+    let rainAtlas = null;
+    function buildRain(prev) {
+      const px = 11 * dpr, font = `${px}px Silkscreen, monospace`;
+      const c = prev && prev.dpr === dpr ? prev.c : document.createElement('canvas'), q = c.getContext('2d');
+      q.font = font;
+      const cw = Math.ceil(q.measureText('WW').width) + 4, ch = Math.ceil(px * 1.4), base = Math.ceil(px * 1.1);
+      c.width = cw * 16; c.height = ch * 32;
+      q.font = font; q.textAlign = 'center'; q.textBaseline = 'alphabetic';
+      for (let v = 0; v < 2; v++) {
+        q.fillStyle = v ? `rgb(${TH.rain})` : '#ffffff';
+        for (let hi = 0; hi < 16; hi++) for (let lo = 0; lo < 16; lo++) q.fillText(HEX[hi] + HEX[lo], lo * cw + cw / 2, (v * 16 + hi) * ch + base);
+      }
+      return { c, cw, ch, base, dpr, ok: !document.fonts || document.fonts.check(font), tick: t / 500 | 0 };
+    }
+    const RING_TXT =Array.from({ length: 40 }, (_, i) => HEX[(i * 7 + hsh) % 16]).join('');
     const ADDR = '0x' + hsh.toString(16).toUpperCase().padStart(8, '0').slice(-8);
 
     function sprite(sp, x, y, s, o) {
@@ -351,10 +367,47 @@
       const r = s / Math.max(sp.W, sp.H), w = sp.W * r, h = sp.H * r;
       if (clipTop != null) { g.beginPath(); g.rect(-w, -h / 2 - 2, w * 2, h * clipTop + 2); g.clip(); }
       if (black) { g.globalAlpha = a; g.drawImage(sp.black, -w / 2, -h / 2, w, h); g.restore(); return; }
-      if (glow && white < 1) { g.globalAlpha = a * .5; g.shadowColor = tint; g.shadowBlur = glow * dpr; g.drawImage(sp.white, -w / 2, -h / 2, w, h); g.shadowBlur = 0; }
+      const gl = glow ? glowOf(sp, glow * dpr / r) : null;   // 번지는 빛은 미리 구워 둔 그림으로 (매 프레임 흐림 처리를 하지 않아요)
+      const drawGlow = () => g.drawImage(gl.c, -w / 2 - gl.pad * r, -h / 2 - gl.pad * r, w + gl.pad * 2 * r, h + gl.pad * 2 * r);
+      if (gl && white < 1) { g.globalAlpha = a * .5; drawGlow(); }
       if (white < 1) { g.globalAlpha = a * (1 - white * .6); g.drawImage(sp.color, -w / 2, -h / 2, w, h); }
-      if (white > 0) { g.globalAlpha = a * white; g.shadowColor = tint; g.shadowBlur = glow * dpr; g.drawImage(sp.white, -w / 2, -h / 2, w, h); }
+      if (white > 0) { g.globalAlpha = a * white; if (gl) drawGlow(); else g.drawImage(sp.white, -w / 2, -h / 2, w, h); }
       g.restore();
+    }
+    // 흰 실루엣 + 속성색 번짐을 한 번만 그려 두고 다시 써요 (흐림 크기는 2px 단위로 묶어요)
+    function glowOf(sp, blur) {
+      const b = Math.max(2, Math.round(blur / 2) * 2), key = tint + b;
+      sp.glows = sp.glows || {};
+      if (sp.glows[key]) return sp.glows[key];
+      const pad = b * 2, c = document.createElement('canvas'); c.width = sp.W + pad * 2; c.height = sp.H + pad * 2;
+      const q = c.getContext('2d'); q.shadowColor = tint; q.shadowBlur = b; q.drawImage(sp.white, pad, pad);
+      return (sp.glows[key] = { c, pad });
+    }
+    // 글자 그림판: 자주 쓰는 글자를 한 번만 그려 두고 잘라 붙여요 (fillText보다 훨씬 가벼워요)
+    const glyphCache = {};
+    function glyphs(chars, px, color, blur = 0) {
+      const key = chars + '|' + px + '|' + color + '|' + blur;
+      if (glyphCache[key] && glyphCache[key].ok) return glyphCache[key];
+      const font = `${px}px Silkscreen, monospace`, c = document.createElement('canvas'), q = c.getContext('2d');
+      q.font = font;
+      const pad = Math.ceil(blur * 1.5) + 2, cw = Math.ceil(Math.max(...Array.from(chars, ch => q.measureText(ch).width))) + pad * 2, ch = Math.ceil(px * 1.3) + pad * 2;
+      c.width = cw * chars.length; c.height = ch;
+      q.font = font; q.textAlign = 'center'; q.textBaseline = 'middle'; q.fillStyle = color;
+      if (blur) { q.shadowColor = color; q.shadowBlur = blur; }
+      Array.from(chars).forEach((s, i) => q.fillText(s, i * cw + cw / 2, ch / 2));
+      const ok = !document.fonts || document.fonts.check(font);
+      return (glyphCache[key] = { c, cw, ch, idx: Object.fromEntries(Array.from(chars, (s, i) => [s, i])), ok });
+    }
+    // 원을 따라 글자를 세워 그려요 (현재 변환 위에 겹쳐서)
+    function glyphRing(G, text, n, x, y, r, rot, step, scale) {
+      const base = g.getTransform(), w = G.cw * scale, h = G.ch * scale;
+      for (let i = 0; i < n; i++) {
+        const j = G.idx[text[i % text.length]]; if (j == null) continue;
+        const a = rot + i * step, ca = Math.cos(a + Math.PI / 2), sa = Math.sin(a + Math.PI / 2);
+        g.setTransform(base.multiply(new DOMMatrix([ca, sa, -sa, ca, x + Math.cos(a) * r, y + Math.sin(a) * r])));
+        g.drawImage(G.c, j * G.cw, 0, G.cw, G.ch, -w / 2, -h / 2, w, h);
+      }
+      g.setTransform(base);
     }
     function ring(cx, cy, r, a, wdt, color = tint) {
       if (a <= 0 || r <= 0) return;
@@ -570,17 +623,26 @@
       g.restore();
     }
     // 백신: 천천히 흔들리며 떨어지는 빛의 깃털
+    let featherImg = null;
     const feathers = Array.from({ length: 46 }, (_, i) => ({ x: rndS(i, 3), y: rndS(i, 4), s: .6 + rndS(i, 5) * .9, v: .00004 + rndS(i, 6) * .00006, ph: rndS(i, 7) * 6.28 }));
     function featherFall(k) {
       if (k <= 0) return;
+      if (!featherImg) {                          // 깃털 한 장을 미리 그려 두고 돌려 붙여요
+        const L0 = 40, c = document.createElement('canvas'); c.width = L0 * 2; c.height = Math.ceil(L0 * .6) + 2;
+        const q = c.getContext('2d'), my = c.height / 2;
+        const fg = q.createLinearGradient(0, 0, L0 * 2, 0); fg.addColorStop(0, tint + '00'); fg.addColorStop(.5, '#ffffff'); fg.addColorStop(1, tint + '00');
+        q.fillStyle = fg; q.beginPath(); q.ellipse(L0, my, L0, L0 * .3, 0, 0, Math.PI * 2); q.fill();
+        q.fillStyle = '#ffffff'; q.fillRect(L0 * .1, my - 1.2, L0 * 1.8, 2.4);
+        featherImg = c;
+      }
+      const base = g.getTransform(), fw = featherImg.width, fh = featherImg.height;
       g.save(); g.globalCompositeOperation = 'lighter';
       for (const f of feathers) {
         const y = (((f.y + t * f.v) % 1.1) - .05) * H, x = f.x * W + Math.sin(t / 900 + f.ph) * 30 * dpr, L = 12 * f.s * dpr;
-        g.save(); g.translate(x, y); g.rotate(Math.sin(t / 700 + f.ph) * .8); g.globalAlpha = k * (.35 + .4 * f.s);
-        const fg = g.createLinearGradient(-L, 0, L, 0); fg.addColorStop(0, tint + '00'); fg.addColorStop(.5, '#ffffff'); fg.addColorStop(1, tint + '00');
-        g.fillStyle = fg; g.beginPath(); g.ellipse(0, 0, L, L * .3, 0, 0, Math.PI * 2); g.fill();
-        g.fillStyle = '#ffffff'; g.fillRect(-L * .9, -.5 * dpr, L * 1.8, 1 * dpr);
-        g.restore();
+        const a = Math.sin(t / 700 + f.ph) * .8, s = L / (fw / 2);
+        g.setTransform(base.a * Math.cos(a) * s, Math.sin(a) * s, -Math.sin(a) * s, base.d * Math.cos(a) * s, base.e + x, base.f + y);
+        g.globalAlpha = k * (.35 + .4 * f.s);
+        g.drawImage(featherImg, -fw / 2, -fh / 2);
       }
       g.restore();
     }
@@ -589,13 +651,19 @@
       if (k <= 0 || r <= 0) return;
       g.save(); g.globalAlpha = clamp(k); g.strokeStyle = tint; g.fillStyle = '#ffffff'; g.shadowColor = tint; g.shadowBlur = 14 * dpr;
       g.lineWidth = 1.8 * dpr; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.stroke();
-      g.lineWidth = 1 * dpr; g.beginPath(); g.arc(x, y, r * 1.12, 0, Math.PI * 2); g.stroke();
-      g.beginPath(); g.arc(x, y, r * .74, 0, Math.PI * 2); g.stroke();
-      g.beginPath(); for (let i = 0; i <= 12; i++) { const a = -rot + i * Math.PI / 6; g[i ? 'lineTo' : 'moveTo'](x + Math.cos(a) * r * .74, y + Math.sin(a) * r * .74); } g.stroke();
-      g.beginPath(); for (let i = 0; i < 12; i++) { const a = -rot + i * Math.PI / 6; g.moveTo(x + Math.cos(a) * r * .74, y + Math.sin(a) * r * .74); g.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r); } g.stroke();
-      g.font = `${Math.max(8, r / 16)}px Silkscreen, monospace`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.shadowBlur = 6 * dpr;
-      for (let i = 0; i < 40; i++) { const a = rot + i * Math.PI / 20; g.save(); g.translate(x + Math.cos(a) * r * 1.06, y + Math.sin(a) * r * 1.06); g.rotate(a + Math.PI / 2); g.fillText(HEX[(i * 7 + hsh) % 16], 0, 0); g.restore(); }
-      for (let i = 0; i < 12; i++) { const a = -rot * .5 + i * Math.PI / 6; g.beginPath(); g.arc(x + Math.cos(a) * r * 1.2, y + Math.sin(a) * r * 1.2, Math.max(2, r / 70), 0, Math.PI * 2); g.fill(); }
+      // 가는 선은 한 경로로 모아 한 번에 그려요 (흐림 처리가 한 번만 일어나요)
+      g.lineWidth = 1 * dpr; g.beginPath();
+      g.moveTo(x + r * 1.12, y); g.arc(x, y, r * 1.12, 0, Math.PI * 2);
+      g.moveTo(x + r * .74, y); g.arc(x, y, r * .74, 0, Math.PI * 2);
+      for (let i = 0; i <= 12; i++) { const a = -rot + i * Math.PI / 6; g[i ? 'lineTo' : 'moveTo'](x + Math.cos(a) * r * .74, y + Math.sin(a) * r * .74); }
+      for (let i = 0; i < 12; i++) { const a = -rot + i * Math.PI / 6; g.moveTo(x + Math.cos(a) * r * .74, y + Math.sin(a) * r * .74); g.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r); }
+      g.stroke();
+      g.shadowBlur = 0;
+      glyphRing(glyphs(HEX, 32, '#ffffff', 10), RING_TXT, 40, x, y, r * 1.06, rot, Math.PI / 20, Math.max(8, r / 16) / 32);
+      g.shadowBlur = 14 * dpr;
+      g.beginPath();
+      for (let i = 0; i < 12; i++) { const a = -rot * .5 + i * Math.PI / 6, px = x + Math.cos(a) * r * 1.2, py = y + Math.sin(a) * r * 1.2, pr = Math.max(2, r / 70); g.moveTo(px + pr, py); g.arc(px, py, pr, 0, Math.PI * 2); }
+      g.fill();
       g.restore();
     }
     // 백신: 머리 위 광륜
@@ -616,10 +684,10 @@
       g.globalAlpha = clamp(k); g.fillStyle = glow; g.beginPath(); g.ellipse(x, y, w * 1.5, h * 2.6, 0, 0, Math.PI * 2); g.fill();
       // 고리 자체는 덧칠하지 않고 그려요: 밝은 빛 속에서도 금빛 테가 묻히지 않게
       g.globalCompositeOperation = 'source-over';
-      g.shadowColor = tint2; g.shadowBlur = w * .35;
+      g.shadowColor = tint2; g.shadowBlur = Math.min(w * .35, 18 * dpr);
       g.globalAlpha = clamp(k) * .45; g.strokeStyle = tint2; g.lineWidth = lw * 1.6; g.beginPath(); g.ellipse(x, y, w, h, 0, Math.PI, Math.PI * 2); g.stroke();   // 뒤쪽 반
       g.globalAlpha = clamp(k) * .9; g.shadowBlur = 0; g.lineWidth = lw * 2.3; g.strokeStyle = '#b45309'; g.beginPath(); g.ellipse(x, y, w, h, 0, 0, Math.PI * 2); g.stroke();   // 진한 호박색 바깥 테: 밝은 빛 속에서도 고리 모양이 보여요
-      g.shadowBlur = w * .35;
+      g.shadowBlur = Math.min(w * .35, 18 * dpr);
       g.globalAlpha = clamp(k); g.lineWidth = lw * 1.7; g.strokeStyle = tint2; g.beginPath(); g.ellipse(x, y, w, h, 0, 0, Math.PI * 2); g.stroke();                  // 금빛 테
       g.shadowColor = '#ffffff'; g.lineWidth = lw; g.strokeStyle = '#ffffff'; g.beginPath(); g.ellipse(x, y, w, h, 0, 0, Math.PI); g.stroke();                 // 앞쪽 흰 고리
       g.globalAlpha = clamp(k) * .8; g.lineWidth = lw * .55; g.beginPath(); g.ellipse(x, y, w, h, 0, Math.PI, Math.PI * 2); g.stroke();
@@ -836,7 +904,7 @@
         g.quadraticCurveTo(x - r * .55 * s, y - r * .82 * s, x, y - r * s); g.closePath(); };
       // 뒤에서 비치는 후광, 방패 양옆으로 펼쳐지는 빛의 날개
       const aura = g.createRadialGradient(x, y, r * .2, x, y, r * 1.9); aura.addColorStop(0, `rgba(${FLASH},.32)`); aura.addColorStop(.5, tint2 + '22'); aura.addColorStop(1, tint2 + '00');
-      g.save(); g.globalCompositeOperation = 'lighter'; g.fillStyle = aura; g.beginPath(); g.arc(x, y, r * 1.9, 0, Math.PI * 2); g.fill();
+      g.save(); g.globalCompositeOperation = 'lighter'; g.shadowBlur = 0; g.fillStyle = aura; g.beginPath(); g.arc(x, y, r * 1.9, 0, Math.PI * 2); g.fill();   // 후광 · 날개는 이미 부드러운 그라데이션이라 흐림 처리 없이
       for (const sd of [-1, 1]) for (let i = 0; i < 6; i++) {
         const a = (-.35 - i * .2) * Math.PI, L = r * (1.35 - i * .1), fx = x + sd * r * .55, fy = y - r * .35;
         const ex = fx + sd * Math.cos(a + Math.PI) * -L * .9, ey = fy + Math.sin(a) * L * .55 + i * r * .12;
@@ -852,8 +920,9 @@
       g.strokeStyle = tint2; g.lineWidth = r * .07; g.globalAlpha = clamp(k) * .55; g.beginPath(); g.moveTo(x, y - r * .7); g.lineTo(x, y + r * .7); g.moveTo(x - r * .5, y - r * .2); g.lineTo(x + r * .5, y - r * .2); g.stroke();
       g.restore();
       sacredCircle(x, y, r * 1.25, k * .5, rot);
-      g.save(); g.globalAlpha = k * .8; g.fillStyle = tint2; g.font = `${10 * dpr}px Silkscreen, monospace`; g.textAlign = 'center'; g.textBaseline = 'middle';
-      const tx = 'VACCINE · SANCTUM AEGIS · '; for (let i = 0; i < 48; i++) { const a = -rot + i * Math.PI / 24; g.save(); g.translate(x + Math.cos(a) * r * 1.35, y + Math.sin(a) * r * 1.35); g.rotate(a + Math.PI / 2); g.fillText(tx[i % tx.length], 0, 0); g.restore(); }
+      g.save(); g.globalAlpha = k * .8;
+      const tx = 'VACCINE · SANCTUM AEGIS · ';
+      glyphRing(glyphs('VACINESTUMGO·', Math.round(10 * dpr), tint2), tx, 48, x, y, r * 1.35, -rot, Math.PI / 24, 1);
       g.restore();
     }
 
@@ -1079,9 +1148,13 @@
       glitch(out * dk * .7);
     }
 
+    let frameEMA = 0, nFrames = 0, qualAt = 0;
     await new Promise(done => {
       function frame(now) {
-        const dt = Math.min(64, now - last); last = now;
+        const raw = now - last, dt = Math.min(64, raw); last = now;
+        // 화면이 계속 버벅이면(평균 24ms 넘게) 렌더 해상도를 한 단계씩 낮춰요. 창이 가려져 멈췄던 프레임은 세지 않아요
+        if (raw > 0 && raw < 150) { frameEMA = frameEMA ? frameEMA * .92 + raw * .08 : raw; nFrames++; }
+        if (nFrames > 40 && frameEMA > 24 && QUAL > .7 && now - qualAt > 1500) { QUAL = Math.max(.7, QUAL - .15); qualAt = now; nFrames = 20; }
         const sp = (speed() || 1) * (reduce ? 3 : 1);
         t += dt * sp;
         if (!alive() || t >= T.end) return done();
@@ -1114,15 +1187,21 @@
         // 16진수 데이터 열 (증폭될수록 빨라져요)
         const rainFast = 1 + 8 * ampP * (1 - prog(t, T.boom, T.rebuilt));
         const rainA = 1 - .55 * prog(t, T.slam, T.slam + 800);
-        g.font = `${11 * dpr}px Silkscreen, monospace`; g.textAlign = 'center';
+        // 256가지 바이트를 미리 그린 그림판에서 잘라 붙여요 (글자를 매번 그리면 프레임마다 수백 번이라 무거워요)
+        if (!rainAtlas || rainAtlas.dpr !== dpr || (!rainAtlas.ok && (t / 500 | 0) !== rainAtlas.tick)) rainAtlas = buildRain(rainAtlas);
+        const RA = rainAtlas, tA = t / 90 | 0, tB = t / 140 | 0;
         for (const c of cols) {
           c.y += c.v * dt * rainFast * sp; if (c.y - c.n * 14 * dpr > H) c.y = -Math.random() * H * .3;
+          const xi = c.x | 0, dx = c.x - RA.cw / 2;
           for (let k = 0; k < c.n; k++) {
             const yy = c.y - k * 14 * dpr; if (yy < -20 || yy > H + 20) continue;
-            g.fillStyle = k === 0 ? `rgba(255,255,255,${.45 * A0 * rainA})` : `rgba(${TH.rain},${(.24 - k * .016) * A0 * rainA})`;
-            g.fillText(byte(k, c.x | 0), c.x, yy);
+            const al = (k === 0 ? .45 : .24 - k * .016) * A0 * rainA; if (al <= 0) continue;
+            const hi = (k * 7 + xi + tA) % 16, lo = (k * 13 + xi * 3 + tB) % 16;
+            g.globalAlpha = al;
+            g.drawImage(RA.c, lo * RA.cw, ((k === 0 ? 0 : 16) + hi) * RA.ch, RA.cw, RA.ch, dx, yy - RA.base, RA.cw, RA.ch);
           }
         }
+        g.globalAlpha = 1;
 
         // 테마 배경: 백신은 빛기둥과 깃털, 바이러스는 가장자리에서 자라는 촉수
         if (themeId === 'holy') {
@@ -1148,9 +1227,15 @@
         const gridK = A0 * prog(t, T.scan, T.scan + 500) * (1 - prog(t, T.implode, T.boom));
         if (gridK > 0) {
           const y0 = cy + S * .55, scroll = (t / 1000) * (1 + ampP * 6);
-          g.save(); g.strokeStyle = tint; g.lineWidth = 1 * dpr; g.shadowColor = tint; g.shadowBlur = 8 * dpr;
-          for (let i = 0; i < 14; i++) { const f = ((i + scroll) % 14) / 14, y = y0 + (H - y0) * f * f; g.globalAlpha = gridK * .55 * f; g.beginPath(); g.moveTo(0, y); g.lineTo(W, y); g.stroke(); }
-          for (let i = -12; i <= 12; i++) { g.globalAlpha = gridK * .35; g.beginPath(); g.moveTo(cx + i * W * .012, y0); g.lineTo(cx + i * W * .2, H + 10); g.stroke(); }
+          // 흐림 그림자 대신 굵고 옅은 선 + 가는 선을 겹쳐 빛나 보이게 해요 (세로선은 한 번에)
+          g.save(); g.strokeStyle = tint;
+          for (const [lw, la] of [[5, .22], [1, 1]]) {
+            g.lineWidth = lw * dpr;
+            for (let i = 0; i < 14; i++) { const f = ((i + scroll) % 14) / 14, y = y0 + (H - y0) * f * f; g.globalAlpha = gridK * .55 * f * la; g.beginPath(); g.moveTo(0, y); g.lineTo(W, y); g.stroke(); }
+            g.globalAlpha = gridK * .35 * la; g.beginPath();
+            for (let i = -12; i <= 12; i++) { g.moveTo(cx + i * W * .012, y0); g.lineTo(cx + i * W * .2, H + 10); }
+            g.stroke();
+          }
           g.restore();
         }
         streaks((prog(t, T.call, T.call + 120) * (1 - prog(t, T.callOut - 300, T.callOut)) * .8
@@ -1328,7 +1413,7 @@
           g.font = `${11 * dpr}px Silkscreen, monospace`; g.fillText(`DIGITAL DATA AMPLIFIER · ${ADDR}`, x0, y0);
           g.fillStyle = '#ffffff'; g.font = `${26 * dpr}px Silkscreen, monospace`; y0 += 34 * dpr;
           const HW = TH.hud; g.fillText(t < T.dis ? HW[0] : t < T.amp[0] ? HW[1] : inOvf && t < T.boom ? 'OVERFLOW' : t < T.implode ? `${HW[2]} ${multTxt}` : t < T.boom ? HW[3] : HW[4], x0, y0);
-          g.font = `${13 * dpr}px Silkscreen, monospace`; y0 += 26 * dpr; g.fillStyle = '#cbd5e1';
+          g.font = `${13 * dpr}px Silkscreen, monospace`; y0 += 26 * dpr; g.fillStyle = '#cbd5e1'; g.shadowBlur = 0;   // 작은 수치 줄은 번짐 없이 (글자마다 흐림 처리가 무거워요)
           g.fillText(`CAPACITY  ${inOvf && t < T.boom ? garbage().replace('×', '') + ' TB' : fmtMB(capNow)}`, x0, y0); y0 += 19 * dpr;
           g.fillText(`PACKETS   ${inOvf && t < T.boom ? (Math.random() < .5 ? '-2,147,483,648' : 'NaN') : (baseCount * mult).toLocaleString()}`, x0, y0); y0 += 19 * dpr;
           if (ELD) { g.fillStyle = ELD.col; g.fillText(`ELEMENT   ${ELD.name}`, x0, y0); y0 += 19 * dpr; g.fillStyle = '#cbd5e1'; }
