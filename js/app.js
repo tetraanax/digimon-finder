@@ -498,6 +498,13 @@ async function randomStart(){
   lastRes = { dg, human };
   startJourney(pickFrom(Object.keys(JD.focus)));
 }
+// 혼자서 여행하기: 파트너 없이 사람으로 떠나요 (모험 방향을 고른 뒤 출발 · 진화 조건을 채우면 스피릿 진화)
+function soloStart(){
+  if (busy || J) return;
+  openNet(); hideCard();
+  lastRes = { dg: humanDg(['brave', 'wild']), human: true };
+  startJourney();
+}
 // 떠나기 전에 모험 방향을 한 번 골라요 (지난번 고른 방향이 미리 표시돼요). 여행 중에도 패널에서 바꿀 수 있어요
 function pickDirection(){
   const me = J;
@@ -1100,6 +1107,7 @@ addEventListener('keydown', e => {
 });
 
 $('randomGo').addEventListener('click', randomStart);
+$('soloGo').addEventListener('click', soloStart);
 $('f').addEventListener('submit', e => {
   e.preventDefault();
   const inp = read();
