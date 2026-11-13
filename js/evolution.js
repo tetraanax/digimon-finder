@@ -692,8 +692,10 @@
       if (barCache[seed]) return barCache[seed];
       let q = ((hsh + seed * 7919) % 2147483646) + 1; const r = () => (q = (q * 16807) % 2147483647) / 2147483647;
       const units = [], cols = ['#ffffff', '#e0f2fe', '#bae6fd', '#dbeafe'];
-      let u = 0; while (u < 300) { const w = r() < .55 ? 1 : r() < .6 ? 2 : r() < .7 ? 3 : 4, gap = r() < .6 ? 1 : r() < .7 ? 2 : 3;
-        units.push([u, w, .6 + .4 * r(), cols[r() * cols.length | 0]]); u += w + gap; }
+      // 막대 폭: 머리카락처럼 가는 줄이 가장 많고, 중간 · 굵은 · 아주 굵은 막대가 섞여요. 틈도 들쭉날쭉하게
+      const W = [.3, .3, .3, .55, .55, .9, 1.5, 2.2], G = [.45, .45, .8, .8, 1.3, 2.1];
+      let u = 0; while (u < 230) { const w = W[r() * W.length | 0], gap = G[r() * G.length | 0];
+        units.push([u, w, w < .5 ? .55 + .3 * r() : .75 + .25 * r(), cols[r() * cols.length | 0]]); u += w + gap; }
       return (barCache[seed] = units.map(([a, w, l, c]) => [a / u, w / u, l, c]));
     }
     function barcodeRing(x, y, R, tilt, h, k, rot, side, th = 0, seed = 0) {
@@ -706,7 +708,7 @@
       g.strokeStyle = '#e0f2fe'; g.globalAlpha = clamp(k * (front ? .1 : .04)); g.lineWidth = h * .9; g.stroke();
       for (const [st, w, l, c] of P) {
         const a = rot + (st + w / 2) * TAU, sn = Math.sin(a); if ((sn > 0) !== front) continue;
-        const px = Math.cos(a) * R, py = sn * R * tilt, bw = Math.max(.7 * dpr, w * TAU * R * Math.abs(sn) * .92);
+        const px = Math.cos(a) * R, py = sn * R * tilt, bw = Math.max(.6 * dpr, w * TAU * R * Math.abs(sn));
         g.globalAlpha = clamp(k * l * (front ? .55 + .45 * sn : .1 - .06 * sn));
         g.fillStyle = c; g.fillRect(px - bw / 2, py - h / 2, bw, h);
       }
@@ -715,6 +717,8 @@
     // 고리 배치: 1개 → 3개 → 8개 (몸을 위아래로 덮어요) → 8개 + 2배 큰 고리 4겹.
     // 반환: [세로 위치 -1~1, 반지름 배율, 기울기, 기울인 각도, 도는 방향 · 빠르기, 큰 고리인지]
     function ringLayout(n) {
+      // 3개: 같은 중심에서 60°씩 돌아가 서로 교차하는 ✱ 모양
+      if (n === 3) return [0, 1, 2].map(j => [0, 1, .26, j * Math.PI / 3 - Math.PI / 2 + .25, j % 2 ? -1.2 : 1, false]);
       const base = Math.min(8, Math.max(1, n)), big = Math.max(0, n - 8), out = [];
       for (let j = 0; j < base; j++) { const o = base === 1 ? 0 : -1 + 2 * j / (base - 1);
         out.push([o, 1, .22, (j % 2 ? 1 : -1) * (.06 + .04 * (j % 3)), (j % 2 ? -1.3 : 1) * (1 + .15 * (j % 3)), false]); }
@@ -1316,7 +1320,7 @@
                + prog(t, T.slam, T.slam + 60) * (1 - prog(t, T.slam + 200, T.slam + 700)) * .7) * A0);
 
         // 스피릿: 바코드 고리가 아래에서 차례로 올라와 몸을 감싸고 돌다가, 분해가 시작되면 가운데로 조여들어요
-        const spA = themeId === 'spirit' && t < T.disEnd + 300 ? (side => {
+        const spA = themeId === 'spirit' && noFrom && t < T.disEnd + 300 ? (side => {   // 사람에서 시작할 때만: 빈자리에 고리가 나타나 흩어지며 입자가 돼요
           const sq = 1 - .55 * easeIn(prog(t, T.dis, T.disEnd)), spin = t * .0016 * (1 + 2 * prog(t, T.scan, T.disEnd));
           const lay = ringLayout(RINGS), n = lay.length, span = S * (RINGS >= 8 ? .42 : .3);
           lay.forEach(([o, rm, tl, th, sp, big], j) => {      // 고리가 하나씩 커다랗게 나타나 제자리로 조여들어요
@@ -1380,9 +1384,24 @@
         // 3단계부터: 구체에서 화면 끝으로 번개가 튀어요 (4단계는 더 자주, 더 굵게)
         if (LV >= 5) { const lk = A0 * ampP * (1 - prog(t, T.implode, T.boom)); if (lk > 0) lightning(cx, cy, Rbase, M, lk, LV >= 6 ? 4 : 2); }
         // 스피릿: 증폭되는 구체를 바코드 고리 세 줄이 감고, 증폭될수록 빨리 돌아요 (응축 때 함께 빨려 들어가요)
-        const spB = themeId === 'spirit' ? A0 * prog(t, T.amp0 - 700, T.amp0) * (1 - prog(t, T.implode + 200, T.boom)) : 0;
-        const spBR = Math.max(S * .5, Rbase * 1.08) * implodeK, spBspin = t * .0016 * (1 + 3 * ampP);
-        if (spB > 0) barcodeRings(cx, cy, spBR, spBR * .72, Math.max(S * .04, spBR * (RINGS >= 8 ? .08 : .12)), spB * (.8 + .2 * heart), spBspin, 'back', RINGS, true);
+        // 스피릿: 바코드 고리가 심장박동에 맞춰 하나씩 튀어나오고, 박동마다 크기 · 기울기 · 위치가 함께 요동치며
+        // 증폭될수록 커지다가 응축 때 가운데로 뭉쳐요 (고리들을 박자에 고르게 나눠 배치)
+        const spB = themeId === 'spirit' ? A0 * (1 - prog(t, T.implode + 200, T.boom)) : 0;
+        const spBspin = t * .0016 * (1 + 3 * ampP);
+        const beatRings = side => {
+          const lay = ringLayout(RINGS), nb = T.nNormal, sph = RINGS !== 3;
+          lay.forEach(([o, rm, tl, th, sp, big], j) => {
+            const tb = T.amp[Math.min(nb - 1, Math.floor(j * nb / lay.length))];
+            if (t < tb - 60) return;
+            const pop = easeOut(prog(t, tb - 60, tb + 200)), kick = 1 + .45 * Math.exp(-Math.max(0, t - tb) / 170);   // 나타나는 순간 크게 튀었다가 제자리로
+            const R = Math.max(S * .5, Math.min(Rbase * 1.08, S * .88)) * rm * implodeK * (1 + .14 * heart) * kick;   // 커지되 화면을 넘치지 않게
+            const jx = Math.sin(t * .093 + j * 3.1) * heart * S * .025, jy = Math.cos(t * .117 + j * 1.7) * heart * S * .025;   // 박동마다 흔들려요
+            const oy = o * R * .6 * (big ? .8 : 1) * implodeK, rr = sph && !big ? R * Math.sqrt(Math.max(.12, 1 - (oy / Math.max(R, 1)) ** 2)) : R;
+            const h = Math.max(S * .045, R * (RINGS >= 8 ? .095 : .13)) * (1 + .3 * heart);
+            barcodeRing(cx + jx, cy + oy + jy, rr, tl * (1 + .35 * heart), h, spB * pop * (big ? .5 : 1) * (.75 + .25 * heart), spBspin * sp + j * 1.7, side, th + heart * .08 * (j % 2 ? 1 : -1), j);
+          });
+        };
+        if (spB > 0) beatRings('back');
         /* 4~6) 입자: 분해 → 소용돌이 구체 → 증폭 → 응축 → 대폭발 → 새 모습으로 재조립 */
         const boomK = easeOut(prog(t, T.boom, T.boom + 650));
         const settle = lerp(1.32, 1, easeOut(prog(t, T.rebuilt - 600, T.slam + 300)));
@@ -1432,7 +1451,7 @@
           g.restore();
         }
 
-        if (spB > 0) barcodeRings(cx, cy, spBR, spBR * .72, Math.max(S * .04, spBR * (RINGS >= 8 ? .08 : .12)), spB * (.8 + .2 * heart), spBspin, 'front', RINGS, true);
+        if (spB > 0) beatRings('front');
         if (themeId === 'virus') darkCore(cx, cy, S * (.12 + .42 * ampP) * implodeK, A0 * prog(t, T.amp[0] - 700, T.amp[0]) * (1 - prog(t, T.boom - 60, T.boom)));
         if (themeId === 'vaccine') {
           const vk = A0 * prog(t, T.amp0 - 600, T.amp0) * (1 - prog(t, T.implode, T.boom));
