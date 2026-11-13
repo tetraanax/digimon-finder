@@ -28,7 +28,6 @@
   function fileFor(name) {
     if (!name) return null;
     const n = String(name).trim();
-    if (n === '인간') return 'img/human.svg';          // 파트너 없이 떠난 사람 (스피릿 진화 전)
     let e = entry(n);
     if (!(e && e.row[0]) && /X$/.test(n)) e = entry(n.slice(0, -1));   // X항체 그림이 없으면 기본 모습
     return e && e.row[0] ? DB_DIR + e.row[0] : null;

@@ -108,11 +108,22 @@ async function run(inp){
   busy = false;
 }
 
+// 결과 카드 그림: 비스듬히 기운 바코드 고리 문양 (굵고 가는 막대가 타원을 따라 감겨요 · 앞쪽 반은 밝게)
+function codeRingSVG(){
+  const r = rng(hash('spirit-code')), bars = []; let u = 0;
+  while (u < 300) { const w = r() < .55 ? 1 : r() < .6 ? 2 : r() < .7 ? 3 : 4; bars.push([u, w, .6 + .4 * r()]); u += w + (r() < .6 ? 1 : r() < .7 ? 2 : 3); }
+  const R = 46, T = .26, H = 16, out = [];
+  for (const [st, w, l] of bars) {
+    const a = (st + w / 2) / u * Math.PI * 2, s = Math.sin(a), x = Math.cos(a) * R, y = s * R * T, bw = Math.max(.6, w / u * Math.PI * 2 * R * Math.abs(s) * .92);
+    out.push(`<rect x="${(x - bw / 2).toFixed(2)}" y="${(y - H / 2).toFixed(2)}" width="${bw.toFixed(2)}" height="${H}" fill="${s > 0 ? '#e0f2fe' : '#93c5fd'}" opacity="${(l * (s > 0 ? .55 + .45 * s : .12 - .06 * s)).toFixed(2)}"/>`);
+  }
+  return `<svg viewBox="-60 -60 120 120" width="100%" height="100%" aria-hidden="true"><g transform="rotate(-12)"><ellipse rx="${R}" ry="${R * T}" fill="none" stroke="#93c5fd" stroke-opacity=".18" stroke-width="${H * 1.5}"/>${out.join('')}</g></svg>`;
+}
 // 파트너를 찾지 못했을 때의 결과 카드
 function renderLost(res){
   card.innerHTML = `
     <div class="tag">NO PARTNER${roll ? ' · REROLL ' + roll : ''}</div>
-    <div class="hero"><div class="art has-img lost-art"><img src="img/human.svg" alt=""></div>
+    <div class="hero"><div class="art lost-art">${codeRingSVG()}</div>
       <div class="name"><h2 class="lost-title">파트너 디지몬을 찾지 못했습니다</h2><div class="en">PARTNER SIGNAL NOT FOUND</div></div></div>
     <p class="desc">파트너를 찾는 여행을 떠나보세요. ${esc(JD.frontier.desc)}</p>
     <div class="actions">
@@ -618,12 +629,12 @@ function spiritCandidates(k){
   if (isHumanForm()) {
     const t = J.traits, top = [...TRAITS].sort((a, b) => t[b] - t[a])[0];
     const ok = F.lines.filter(l => window.digiImage(l.h)), fit = ok.filter(l => l.trait === top);
-    return (fit.length ? fit : ok).map(l => ({ name: l.h, stage: k + 1, label: '휴먼 스피릿', path: `${l.spirit}의 휴먼 스피릿`, attr: attrOf(l.h), spirit: l, kind: SPIRIT }));
+    return (fit.length ? fit : ok).map(l => ({ name: l.h, stage: k + 1, label: '휴먼 스피릿', rings: 1, path: `${l.spirit}의 휴먼 스피릿`, attr: attrOf(l.h), spirit: l, kind: SPIRIT }));
   }
   const l = J.spiritLine; if (!l) return null;
-  if (J.form === l.h && l.b && soloOK(l.h, l.b)) return [{ name: l.b, stage: k + 1, label: '비스트 스피릿', path: `${l.spirit}의 비스트 스피릿`, attr: attrOf(l.b), kind: SPIRIT }];
-  if (J.form === l.b && l.f && (soloOK(l.b, l.f) || soloOK(l.h, l.f))) return [{ name: l.f, stage: k + 1, label: '융합 진화', path: `${l.spirit}의 휴먼 · 비스트 스피릿 융합`, attr: attrOf(l.f), kind: SPIRIT }];
-  if (J.form === l.b && !l.f && l.a && (soloOK(l.b, l.a) || soloOK(l.h, l.a))) return [{ name: l.a, stage: k + 1, label: '고대 투사', path: `${l.spirit}의 스피릿이 고대의 모습으로`, attr: attrOf(l.a), kind: SPIRIT }];
+  if (J.form === l.h && l.b && soloOK(l.h, l.b)) return [{ name: l.b, stage: k + 1, label: '비스트 스피릿', rings: 3, path: `${l.spirit}의 비스트 스피릿`, attr: attrOf(l.b), kind: SPIRIT }];
+  if (J.form === l.b && l.f && (soloOK(l.b, l.f) || soloOK(l.h, l.f))) return [{ name: l.f, stage: k + 1, label: '융합 진화', rings: 8, path: `${l.spirit}의 휴먼 · 비스트 스피릿 융합`, attr: attrOf(l.f), kind: SPIRIT }];
+  if (J.form === l.b && !l.f && l.a && (soloOK(l.b, l.a) || soloOK(l.h, l.a))) return [{ name: l.a, stage: k + 1, label: '고대 투사', rings: 8, path: `${l.spirit}의 스피릿이 고대의 모습으로`, attr: attrOf(l.a), kind: SPIRIT }];
   return null;
 }
 function decideEvolution(k){
@@ -641,7 +652,7 @@ function applyEvolution(evo){
 async function playEvolution(evo, kind = 'EVOLUTION'){
   const me = J, cap = evo.cap = evoCapacity(evo), from = J.form, baby = evo.stage < 0;
   const lbl = evo.label || evo.special || stageLabel(evo.stage);
-  await window.evoCinematic.play({ from, to: evo.name, partner: evo.partner, desc: infoOf(evo.name), kind, attr: baby ? '' : attrOf(evo.name), fromCap: capacity(from, J.stage), label: baby ? lbl : [lbl, ATTR[attrOf(evo.name)][0]].join(' · '), cap, stage: evo.special ? 4 : evo.stage, fall: evo.fall || null, alive: () => J === me });
+  await window.evoCinematic.play({ from, to: evo.name, partner: evo.partner, desc: infoOf(evo.name), kind, attr: baby ? '' : attrOf(evo.name), fromCap: capacity(from, J.stage), label: baby ? lbl : [lbl, ATTR[attrOf(evo.name)][0]].join(' · '), cap, stage: evo.special ? 4 : evo.stage, rings: evo.rings || 0, fall: evo.fall || null, alive: () => J === me });
   if (J !== me) return;
   const verb = kind === SPIRIT ? '스피릿 진화' : '진화';
   await NET.evolveFx({ label: evo.name, img: null, sub: `${kind} · ${evo.label || evo.special || stageLabel(evo.stage)} · ${cap}`, title: `${from}${ga(from)} ${evo.name}${ro(evo.name)} ${verb}!` });
@@ -699,7 +710,7 @@ function lateralEvolution(){
   // 스피릿 진화의 길: 융합 다음에는 통합 진화만, 하이브리드체 모습에서는 다른 단계의 모습으로 옆걸음하지 않아요
   const sl = J.human && J.spiritLine;
   if (sl && sl.u && J.form === sl.f && soloOK(sl.f, sl.u))
-    return { name: sl.u, stage: J.stage, label: '통합 진화', path: `${sl.spirit}의 스피릿 통합`, src: evoSrc(sl.f, sl.u), attr: attrOf(sl.u), kind: SPIRIT, keepSpecial: true };
+    return { name: sl.u, stage: J.stage, label: '통합 진화', rings: 12, path: `${sl.spirit}의 스피릿 통합`, src: evoSrc(sl.f, sl.u), attr: attrOf(sl.u), kind: SPIRIT, keepSpecial: true };
   if (sl && /하이브리드체/.test(((window.digiData && window.digiData(J.form)) || {}).level || '')) return null;
   const t = J.traits, top = [...TRAITS].sort((a, b) => t[b] - t[a])[0], darkOk = top === 'dark' || t.dark >= statSum() * L.darkShare;
   let list = lateralForms().filter(e => e.dark ? darkOk : top !== 'dark');

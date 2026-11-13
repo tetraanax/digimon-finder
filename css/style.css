@@ -478,3 +478,4 @@ h1{background:linear-gradient(90deg,#a5f3fc,#c4b5fd 45%,#f9a8d4);-webkit-backgro
 .jmap-legend span{display:inline-flex;align-items:center;gap:5px}
 .jmap-legend i{width:10px;height:10px;border-radius:3px;display:inline-block}
 .name h2.lost-title{font-size:clamp(26px,5vw,34px);line-height:1.25;word-break:keep-all}
+.lost-art{background:radial-gradient(circle,#0b1a33,#050814)}
