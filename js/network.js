@@ -857,13 +857,14 @@
       return { dist, prev };
     }
     /* first search: long dive from far away, ends on the partner's node */
-    trace({ partner, names = [] }) {
+    trace({ partner, names = [], lost = false }) {
       const G = this.G, start = this.current, { dist, prev } = this.bfs(start);
       const cands = []; let far = start;
       for (let i = 0; i < G.n; i++) { if (dist[i] > dist[far]) far = i; if (dist[i] >= 22 && dist[i] <= 40 && G.K[i] !== RELAY && G.K[i] !== BEAD && G.RG[i] >= 0 && !isSecret(G.RG[i]) && G.CL[i] !== G.CL[start]) cands.push(i); }
       const target = cands.length ? cands[Math.random() * cands.length | 0] : far;
-      return this.go(target, prev, { intro: true, label: partner, sub: 'PARTNER FOUND', pool: names.filter(nm => nm !== partner),
-        trav: '파트너 신호를 추적하는 중', lock: ['SIGNAL LOCKED', `${partner} 발견!`], totalMs: 4600, near: 520 });
+      // lost: 끝까지 따라갔지만 파트너 신호가 없어요 (파트너를 찾지 못한 사람)
+      return this.go(target, prev, { intro: true, label: lost ? 'NO SIGNAL' : partner, sub: lost ? 'PARTNER NOT FOUND' : 'PARTNER FOUND', pool: names.filter(nm => nm !== partner),
+        trav: '파트너 신호를 추적하는 중', lock: lost ? ['SIGNAL LOST', '파트너 신호를 찾지 못했어요'] : ['SIGNAL LOCKED', `${partner} 발견!`], totalMs: 4600, near: 520 });
     }
     /* journey: jump to a random node inside a region */
     travelTo(regionId, { label = '', sub = '', flash = false, title = '', img = null } = {}) {

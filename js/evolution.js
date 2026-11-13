@@ -82,6 +82,7 @@
                금빛 방패 문장과 성스러운 문양 원, 머리 위 광륜이 떠요 (SANCTIFIED)
      free    — 프리종: 무지갯빛 입자
      capsule — 캡슐(아머) 진화: 궤도를 도는 캡슐 판, 조각들이 날아와 캡슐 껍질로 맞물렸다가 깨지며 등장
+     spirit  — 스피릿 진화: 사람이 전설의 투사의 스피릿을 받아 디지몬이 돼요 (주황빛 · 기본 연출 위에 스피릿 색)
      jogress — 조그레스: 두 디지몬의 데이터가 분홍 · 하늘색 이중 나선으로 꼬이다 하나로 합쳐져요 */
   const THEMES = {
     data:    { title: 'LIMIT BREAK',      hud: ['SCANNING', 'DECOMPILE', 'AMPLIFY', 'LIMIT BREAK', 'RECOMPILE'], mult: 'EXPAND', rain: '125,211,252' },
@@ -90,10 +91,12 @@
     vaccine: { tint: '#f8fafc', tint2: '#fbbf24', title: 'SANCTIFIED', hud: ['THREAT SCAN', 'SANCTIFY', 'PURIFY', 'HOLY AEGIS', 'DESCEND'], mult: 'PURIFY', rain: '248,250,252', flash: '255,252,240', bg: '7,8,16' },
     free:    { tint: '#34d399', title: 'FREE FORM',        hud: ['SCANNING', 'DECOMPILE', 'AMPLIFY', 'LIMIT BREAK', 'RECOMPILE'], mult: 'EXPAND', rain: '167,243,208' },
     capsule: { tint: '#facc15', tint2: '#fde68a', title: 'CAPSULE UNLOCKED', hud: ['SCANNING', 'DECOMPILE', 'AMPLIFY', 'LIMIT BREAK', 'ARMOR LOCK'], mult: 'EXPAND', rain: '253,224,71', flash: '255,247,214' },
+    spirit:  { tint: '#fb923c', tint2: '#fde68a', title: 'SPIRIT EVOLUTION', hud: ['SCANNING', 'SPIRIT LINK', 'RESONATE', 'H-SPIRIT', 'DESCEND'], mult: 'RESONATE', rain: '253,186,116', flash: '255,240,220' },
     jogress: { tint: '#f472b6', tint2: '#38bdf8', title: 'DNA SYNCHRONIZED', hud: ['SCANNING', 'DNA SPLIT', 'SYNC', 'FUSION', 'RECOMPILE'], mult: 'SYNC', rain: '249,168,212' },
   };
   function pickTheme(kind, attr, label) {
     if (kind === 'CAPSULE EVOLUTION') return 'capsule';
+    if (kind === 'SPIRIT EVOLUTION') return 'spirit';
     if (kind === 'JOGRESS EVOLUTION') return 'jogress';
     if (/마왕|타천사|암흑진화|타락/.test(label)) return 'virus';
     if (/로열나이츠|사성수|올림포스|삼대천사/.test(label)) return 'holy';
@@ -584,9 +587,18 @@
       g.fillStyle = '#22d3ee'; g.fillText(text, x + off, y);
       g.globalCompositeOperation = 'source-over'; g.globalAlpha = a;
       const gr = g.createLinearGradient(0, y - fs * .85, 0, y + fs * .1);
-      gr.addColorStop(0, '#ffffff'); gr.addColorStop(.55, '#ffffff'); gr.addColorStop(1, tint);
-      g.shadowColor = tint; g.shadowBlur = 34 * dpr; g.fillStyle = gr; g.fillText(text, x, y);
-      g.shadowBlur = 0; g.lineWidth = 1.2 * dpr; g.strokeStyle = 'rgba(255,255,255,.6)'; g.strokeText(text, x, y);
+      if (themeId === 'vaccine') {
+        // 백신: 뒤가 하얗게 밝아서 흰 글자가 묻혀요 → 진한 호박색 테두리를 두르고, 흰색에서 금색으로 물들여요
+        g.lineJoin = 'round'; g.lineWidth = Math.max(4 * dpr, fs * .1); g.strokeStyle = 'rgba(69,26,3,.92)';
+        g.shadowColor = 'rgba(30,10,0,.7)'; g.shadowBlur = 14 * dpr; g.strokeText(text, x, y);
+        gr.addColorStop(0, '#ffffff'); gr.addColorStop(.45, '#fff7d6'); gr.addColorStop(1, tint2);
+        g.shadowColor = tint2; g.shadowBlur = 18 * dpr; g.fillStyle = gr; g.fillText(text, x, y);
+        g.shadowBlur = 0; g.lineWidth = 1.2 * dpr; g.strokeStyle = 'rgba(180,83,9,.9)'; g.strokeText(text, x, y);
+      } else {
+        gr.addColorStop(0, '#ffffff'); gr.addColorStop(.55, '#ffffff'); gr.addColorStop(1, tint);
+        g.shadowColor = tint; g.shadowBlur = 34 * dpr; g.fillStyle = gr; g.fillText(text, x, y);
+        g.shadowBlur = 0; g.lineWidth = 1.2 * dpr; g.strokeStyle = 'rgba(255,255,255,.6)'; g.strokeText(text, x, y);
+      }
       g.restore();
       if (p < 1) { g.save(); g.globalCompositeOperation = 'lighter'; g.fillStyle = '#ffffff'; g.shadowColor = tint; g.shadowBlur = 24 * dpr; g.globalAlpha = a; g.fillRect(wipeX - 2 * dpr, y - fs, 3 * dpr, fs * 1.25); g.restore(); }
       return tw;
@@ -1527,6 +1539,7 @@
           const infoA = rA * easeOut(prog(t, T.slam + 500, T.slam + 900));
           if (infoA > 0) {
             g.save(); g.globalAlpha = infoA; g.textAlign = 'center';
+            if (themeId === 'vaccine') { g.shadowColor = 'rgba(20,8,0,.85)'; g.shadowBlur = 6 * dpr; }   // 밝은 배경에서도 읽히게
             const infoY = nameY + 30 * dpr;
             g.font = `${Math.min(17, vw / 26) * dpr}px "Do Hyeon", sans-serif`; g.fillStyle = '#e2e8f0';
             g.fillText(label || kind, cx, infoY);

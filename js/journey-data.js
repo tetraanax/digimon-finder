@@ -29,6 +29,23 @@ window.JOURNEY = {
   babyNames: ['유아기', '유년기'],
   babyCapacity: [[0.2, 0.8, 'MB'], [2, 6, 'MB']],
   babyNeed: [{ top: 4, total: 8, steps: 2 }, { top: 14, total: 36, steps: 6 }],
+  // 파트너를 찾지 못한 사람 (chance): 디지몬 프론티어처럼 사람이 전설의 투사의 스피릿을 받아 직접 디지몬으로 진화해요.
+  // 성장기 자리에서 가장 높은 성향(trait)에 맞는 휴먼 스피릿(h) → 비스트 스피릿(b) → 융합(f) → 통합(u, 같은 단계에서 한 번 더).
+  // 단계마다 도감의 진화 데이터에 근거가 있을 때만 이어지고, 없으면 그 모습의 근거 있는 진화로 자라요
+  frontier: { chance: .06, name: '인간',
+    desc: '파트너 신호가 끝내 잡히지 않았어요. 하지만 디지털 월드는 파트너 없이 찾아온 사람에게도 길을 열어 줄지 몰라요.',
+    lines: [
+      { spirit: '불',   trait: 'courage', h: '아그니몬', b: '브리트라몬', f: '아루다몬', u: '카이젤그레이몬' },
+      { spirit: '빛',   trait: 'courage', h: '볼프몬',   b: '가름몬',     f: '베오울프몬', u: '매그너가루몬' },
+      { spirit: '바람', trait: 'friend',  h: '페어리몬', b: '슈츠몬',     f: '제트실피드몬' },
+      { spirit: '얼음', trait: 'friend',  h: '챠크몬',   b: '블리자몬',   f: '왕펭귄몬' },
+      { spirit: '물',   trait: 'friend',  h: '라나몬',   b: '카르마라몬', f: '사가라몬' },
+      { spirit: '번개', trait: 'power',   h: '블리츠몬', b: '보르그몬',   f: '라이노캅테리몬' },
+      { spirit: '땅',   trait: 'power',   h: '그로트몬', b: '기가스몬' },
+      { spirit: '나무', trait: 'wisdom',  h: '알볼몬',   b: '페탈드라몬' },
+      { spirit: '강철', trait: 'wisdom',  h: '머큐레몬', b: '세피로트몬' },
+      { spirit: '어둠', trait: 'dark',    h: '레베몬',   b: '카이저레오몬', f: '라이히몬' },
+    ] },
   // 친구를 잃는 슬픔: 백신종이 진화 데이터에 근거가 있는 어두운 모습(같은 단계)을 가지고 있을 때,
   // 친밀도가 min 이상인 친구가 위기 사건에서 사라지면(chance) 그 슬픔으로 타락 진화해요
   bondLoss: { min: 45, chance: .5,
