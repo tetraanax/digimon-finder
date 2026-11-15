@@ -277,7 +277,7 @@ const bondChip = b => b && b.d ? `<i class="t-bond${b.d < 0 ? ' neg' : ''}">♥ 
 // 여러 개면 jogress 표(대표 조합) → 대표 진화 → 운명적으로 하나. 같은 모습이면 언제나 같은 짝이에요
 const jogCache = new Map();
 function jogPair(){
-  if (!J || J.special || J.stage < 0) return null;
+  if (!J || J.special || J.stage < 0 || J.jogressed) return null;   // 조그레스는 한 여행에 한 번만
   const key = J.dg.en + '|' + J.form;
   if (jogCache.has(key)) return jogCache.get(key);
   const fixed = JD.jogress.find(j => j.a === J.form);
@@ -288,7 +288,8 @@ function jogPair(){
     for (const e of d.evolvesTo) {
       const [n, main, src, , w] = e, rs = stageOfMon(n);
       // 혼자서도 같은 모습으로 진화할 수 있는 줄은 빼요: 짝과 합체했는데 그냥 진화와 같으면 의미가 없으니까요
-      if (soloEdge(e) || !w || !w.length || rs === null || rs < here || rs > J.stage + 1 || /(X항체)/.test(n) || !window.digiImage(n)) continue;
+      // 도감에서 대표 진화로 표시된 조그레스 줄만 (모든 줄을 쓰면 디지몬 절반 가까이에 짝이 생겨 너무 흔해져요)
+      if (!main || soloEdge(e) || !w || !w.length || rs === null || rs < here || rs > J.stage + 1 || /(X항체)/.test(n) || !window.digiImage(n)) continue;
       const mates = w.filter(m => window.digiImage(m) && stageOfMon(m) !== null);
       if (mates.length) opts.push({ a: J.form, b: mates[hash(key + n) % mates.length], result: n, stage: rs, main, src });
     }
@@ -475,7 +476,7 @@ function startJourney(randomFocus){
   J = { dg, human, spiritLine: null, stage: st0, form: f0, label: lb0, moves: 0, exp: 0, ended: false, baby: baby || [],
         route: [{ form: f0, stage: st0, label: lb0, cap: capacity(f0, st0), regions: [], path: human ? '파트너 없이 출발' : '시작' }],
         visited: new Set([NET.currentRegion()]), recent: [], special: null, branch: null, capsuled: false, jogressed: false, bonds: {}, jogPartner: null,
-        cond: JD.cond.start, focus: savedFocus(), map: [], count: {}, choices: 0, pending: [], world: null, lastJog: -99,
+        cond: JD.cond.start, focus: savedFocus(), map: [], count: {}, choices: 0, pending: [], world: null, lastJog: -999,
         busy: false, choosing: false, traits: Object.fromEntries(TRAITS.map(t => [t, 0])), log: [] };
   NET.speed = 1; $('jFast').classList.remove('on');
   hideCard(); hideChoice();
@@ -832,8 +833,8 @@ async function roam(region, me){
     if (i > 0) { await NET.wander(region.id, `${region.name} 탐험 중 · ${i + 1} / ${steps}`); if (J !== me) return; }
     J.exp++; applyFocus();
     const jg = jogPair();
-    if (jg && bondOf(jg.b) >= JD.bond.jogress && J.exp - J.lastJog >= 4) {
-      // 갈림길: 짝과 마음이 하나가 되면 조그레스를 할지 물어요 (고르지 않으면 몇 걸음 뒤에 다시)
+    if (jg && bondOf(jg.b) >= JD.bond.jogress && J.exp - J.lastJog >= JD.bond.jogGap) {
+      // 갈림길: 짝과 마음이 하나가 되면 조그레스를 할지 물어요 (미루면 jogGap 걸음 동안 다시 묻지 않아요)
       J.lastJog = J.exp; mark('bond');
       await offerChoice(region, `${jg.b}${ga(jg.b)} 곁에서 함께 빛나고 있어요.`, [
         { text: `${jg.b}${wa(jg.b)} 힘을 합쳐 조그레스 진화한다`, fx: gain({ friend: 2 }, JD.statGain.choice), kind: 'jogress', jg },

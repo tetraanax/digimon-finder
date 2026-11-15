@@ -124,7 +124,8 @@ window.JOURNEY = {
      - 그 밖에 선택지나 구역에서 마주치는 디지몬도 partnerMeet 확률로 그 짝이에요 (적으로 나오는 사건은 빼고)
      - tiers: 친밀도 단계 이름 (단계가 오르면 기록에 남아요) */
   bond: {
-    max: 100, jogress: 80, meet: 3, roam: 2, roamDark: -3, partnerGain: [18, 26], partnerMeet: .5,
+    // jogress: 조그레스에 필요한 친밀도, jogGap: 조그레스를 미룬 뒤 다시 물을 때까지의 걸음
+    max: 100, jogress: 90, jogGap: 30, meet: 3, roam: 2, roamDark: -3, partnerGain: [6, 10], partnerMeet: .25,
     act: { friend: 9, courage: 5, wisdom: 4, power: 0, dark: -10 },
     tiers: [[0, '낯선 사이'], [20, '아는 사이'], [45, '친구'], [80, '단짝'], [100, '영혼의 짝']],
   },
@@ -304,7 +305,7 @@ window.JOURNEY = {
   cond: { start: 100, regen: 3, low: 30, evolveMin: 40, evolveHeal: 30 },
 
   // 저절로 일어나는 사건의 기본 비율 (걸음마다 하나). 남은 비율은 평범한 하루(roam)예요
-  rates: { danger: .09, luck: .06, rare: .012, bond: .08, local: .14, world: .02, capsule: .03, partner: .6 },
+  rates: { danger: .09, luck: .06, rare: .012, bond: .08, local: .14, world: .02, capsule: .03, partner: .18 },
 
   // 위기: 컨디션이 깎여요. fork가 있으면 갈림길이 돼요
   dangers: [
