@@ -430,9 +430,9 @@ async function stepEvent(region){
     }
   }
   // 호메오스타시스: 도래(미리 경고하고 다음 이동 뒤 리셋) · 정화(바로 리셋) · 이그드라실의 손길(정화를 한 번 막아요)
-  if (!J.homeo && J.exp > 15 && r() < rate('homeoWarn') && homeoWarn(region)) return;
+  if (!J.homeo && J.exp > 15 && r() < rate('homeoWarn') && await homeoWarn(region)) return;
   if (J.exp > 20 && r() < rate('homeoPurge') && await homeoPurge(region)) return;
-  if (!J.shield && J.exp > 10 && r() < rate('ygg')) { J.shield = 1; mark('rare'); log(fill(JD.homeo.ygg, net, J.form), 'rare', null, J.form); return; }
+  if (!J.shield && J.exp > 10 && r() < rate('ygg')) { J.shield = 1; mark('rare'); await playFx('ygg', { mon: J.form }); if (!J) return; log(fill(JD.homeo.ygg, net, J.form), 'rare', null, J.form); return; }
   // 2) 세계 사건: 끝나거나, 새로 시작
   if (J.world && J.exp >= J.world.until) { const w = curWorld(); J.world = null; mark('world'); log(`🌐 ${w.end}`, 'world'); return; }
   if (!J.world && J.exp > 8 && r() < rate('world')) {
@@ -494,6 +494,8 @@ async function stepEvent(region){
    정화: 구역 하나를 바로 리셋해요. 지금 있는 구역이면 파트너가 삭제돼요(이그드라실의 손길이 있으면 한 번 막아요).
    삭제된 파트너는 파일 섬에서 한 걸음 기다리면 다시 태어나요. 아니면 스피릿을 찾아 혼자 떠날 수도 있어요 */
 const zoneTxt = (t, z) => t.replace('{zone}', z);
+// 사건 연출 (js/event-fx.js): ▶▶ 빠르게면 빨리 지나가요
+const playFx = (kind, o = {}) => window.eventFx ? window.eventFx.play(kind, { ...o, speed: () => NET.speed || 1 }) : Promise.resolve();
 const homeoTargets = exclude => NET.regionList().filter(g => !g.secret && g.id !== exclude && g.name !== JD.homeo.reviveAt && g.name !== JD.horizon.region && !NET.isBlocked(g.id));
 // 리셋된 구역의 디지몬: 그 구역에서 마지막으로 만난 친구와, 그 구역에 사는 조그레스 짝은 친밀도와 함께 사라져요
 function wipeZone(name){
@@ -503,10 +505,11 @@ function wipeZone(name){
   return gone;
 }
 const goneTxt = g => g.length ? `친구였던 ${g.join(', ')}의 데이터도 함께 사라졌어요.` : '';
-function homeoWarn(region){
-  const g = pickFrom(homeoTargets(region.id)); if (!g) return false;
-  J.homeo = { id: g.id, name: g.name, at: J.moves + 1 }; NET.block(g.id);
-  mark('world'); log(zoneTxt(JD.homeo.warn, g.name), 'world'); return true;
+async function homeoWarn(region){
+  const me = J, g = pickFrom(homeoTargets(region.id)); if (!g) return false;
+  J.homeo = { id: g.id, name: g.name, at: J.moves + 1 }; NET.block(g.id); mark('world');
+  await playFx('warn', { zone: g.name }); if (J !== me) return true;
+  log(zoneTxt(JD.homeo.warn, g.name), 'world'); return true;
 }
 function homeoReset(){
   const h = J.homeo; if (!h || J.moves < h.at) return;
@@ -518,10 +521,12 @@ async function homeoPurge(region){
   const me = J, here = Math.random() < JD.homeo.hereChance, g = here ? { id: region.id, name: region.name } : pickFrom(homeoTargets(region.id));
   if (!g) return false;
   if (J.homeo && J.homeo.id === g.id) { NET.unblock(g.id); J.homeo = null; }
-  const gone = wipeZone(g.name);
-  mark('danger'); log(`${zoneTxt(JD.homeo.purge, g.name)}${gone.length ? ' ' + goneTxt(gone) : ''}`, 'danger');
+  const gone = wipeZone(g.name), victim = here && !isHumanForm() ? J.form : '';
+  mark('danger');
+  await playFx('purge', { zone: g.name, mon: victim, saved: !!victim && J.shield > 0 }); if (J !== me) return true;
+  log(`${zoneTxt(JD.homeo.purge, g.name)}${gone.length ? ' ' + goneTxt(gone) : ''}`, 'danger');
   if (!here) return true;
-  if (!(await sleep(2000, me))) return true;
+  if (!(await sleep(1400, me))) return true;
   if (isHumanForm()) { log(JD.homeo.human, 'sys'); return true; }
   if (J.shield) { J.shield = 0; log(fill(JD.homeo.saved, g.name, J.form), 'rare', null, J.form); return true; }
   if (J.human) { log(fill(JD.homeo.spiritLost, g.name, J.form), 'danger', null, null, null, addCond(-20)); toHuman('스피릿이 흩어져 다시 사람으로'); return true; }
@@ -1213,7 +1218,7 @@ netc.addEventListener('pointermove', e => { if (J && !J.busy && card.hidden && !
 netc.addEventListener('pointerleave', () => { NET.hover = -1; });
 netc.addEventListener('click', e => { if (J && !J.busy && !NET.pinching) travel(NET.regionAt(e.clientX, e.clientY)); });
 // 개발용: 주소 끝에 #debug를 붙이면 콘솔에서 __digi.travel(구역번호)로 이동을, __digi.evolve({name, stage, label, partner}, 'JOGRESS EVOLUTION')로 진화 연출을 시험할 수 있어요
-if (location.hash === '#debug') window.__digi = { map: journeyMap, bond: (n, v) => { J.bonds[n] = v; renderJourney(); }, travel, evolve: playEvolution, candidates: k => spiritCandidates(k ?? J.stage) || evoCandidates(k ?? J.stage), lateral: () => lateralForms(), latEvo: () => lateralEvolution(), jog: () => jogPair(), armors: () => armorEdges(), special: name => specialEvolution(secretDef(name)), fallForm: () => fallForm(), loss: friend => bondLoss({ name: NET.regionName(NET.currentRegion()) || 'DEEP WEB' }, friend, fallForm()), baby: dg => babyLine(dg || J.dg), render: () => renderJourney(), net: NET, zone: net => wildOf(net), zones: () => zoneIndex(), home: n => homeOf(n), mood: () => mood(), fit: n => fitOf(n), warn: () => homeoWarn({ id: NET.currentRegion() }), purge: here => { JD.homeo.hereChance = here ? 1 : 0; return homeoPurge({ id: NET.currentRegion(), name: NET.regionName(NET.currentRegion()) }); }, step: () => stepEvent({ id: NET.currentRegion(), name: NET.regionName(NET.currentRegion()), en: '' }), get journey(){ return J; } };
+if (location.hash === '#debug') window.__digi = { map: journeyMap, bond: (n, v) => { J.bonds[n] = v; renderJourney(); }, travel, evolve: playEvolution, candidates: k => spiritCandidates(k ?? J.stage) || evoCandidates(k ?? J.stage), lateral: () => lateralForms(), latEvo: () => lateralEvolution(), jog: () => jogPair(), armors: () => armorEdges(), special: name => specialEvolution(secretDef(name)), fallForm: () => fallForm(), loss: friend => bondLoss({ name: NET.regionName(NET.currentRegion()) || 'DEEP WEB' }, friend, fallForm()), baby: dg => babyLine(dg || J.dg), render: () => renderJourney(), net: NET, zone: net => wildOf(net), zones: () => zoneIndex(), home: n => homeOf(n), mood: () => mood(), fit: n => fitOf(n), warn: () => homeoWarn({ id: NET.currentRegion() }), fx: (k, o) => playFx(k, o), purge: here => { JD.homeo.hereChance = here ? 1 : 0; return homeoPurge({ id: NET.currentRegion(), name: NET.regionName(NET.currentRegion()) }); }, step: () => stepEvent({ id: NET.currentRegion(), name: NET.regionName(NET.currentRegion()), en: '' }), get journey(){ return J; } };
 $('jEnd').addEventListener('click', () => showLog());
 $('jFocus').addEventListener('click', e => {
   const b = e.target.closest('[data-f]'); if (!b || !J || b.dataset.f === J.focus) return;
@@ -1239,11 +1244,11 @@ $('jFast').addEventListener('click', e => {
   e.currentTarget.textContent = NET.speed > 1 ? '보통 속도 ▶' : '빠르게 ▶▶';
 });
 
-$('netSkip').addEventListener('click', () => { if (window.evoCinematic.active) window.evoCinematic.skip(); else NET.skip(); });
+$('netSkip').addEventListener('click', () => { if (window.eventFx && window.eventFx.active) window.eventFx.skip(); else if (window.evoCinematic.active) window.evoCinematic.skip(); else NET.skip(); });
 addEventListener('keydown', e => {
   if (e.key !== 'Escape' || netEl.hidden) return;
   if (!infoEl.hidden) { closeInfo(); return; }
-  if (window.evoCinematic.active) window.evoCinematic.skip(); else if (busy || (J && J.busy)) NET.skip(); else closeNet();
+  if (window.eventFx && window.eventFx.active) window.eventFx.skip(); else if (window.evoCinematic.active) window.evoCinematic.skip(); else if (busy || (J && J.busy)) NET.skip(); else closeNet();
 });
 
 $('randomGo').addEventListener('click', randomStart);
