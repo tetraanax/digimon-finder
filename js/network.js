@@ -752,6 +752,7 @@
       this.focus = { x: this.G.X[this.current], y: this.G.Y[this.current], z: this.G.Z[this.current] };
       this.camD = 1100; this.rot = .6; this.pitch = .32;
       this.unlocked = new Set();
+      this.blocked = new Set();   // 호메오스타시스가 봉쇄한 구역: 들어갈 수도, 지나갈 수도 없어요
       this.mode = 'idle'; this.visited = new Map(); this.pathEdges = new Set(); this.labels = []; this.trail = [];
       this.edgeCount = this.G.E.length / 2;
       this.lux = Uint8Array.from(this.G.RG, g => g >= 0 && isSecret(g) ? 1 : 0);   // 숨겨진 구역의 점: 더 밝고 크게, 가까우면 빛나요
@@ -852,8 +853,8 @@
     // within: 이 구역 번호가 주어지면 그 구역 안의 점만 지나가요 (구역 안을 돌아다닐 때 바깥으로 나갔다 들어오지 않게)
     bfs(start, within) {
       const G = this.G, dist = new Int32Array(G.n).fill(-1), prev = new Int32Array(G.n).fill(-1), q = [start]; dist[start] = 0;
-      const inside = within == null ? null : G.RG;
-      for (let h = 0; h < q.length; h++) { const u = q[h]; for (const v of G.adj[u]) if (dist[v] < 0 && (!inside || inside[v] === within)) { dist[v] = dist[u] + 1; prev[v] = u; q.push(v); } }
+      const inside = within == null ? null : G.RG, blk = this.blocked && this.blocked.size ? this.blocked : null;
+      for (let h = 0; h < q.length; h++) { const u = q[h]; for (const v of G.adj[u]) if (dist[v] < 0 && (!inside || inside[v] === within) && !(blk && blk.has(G.RG[v]))) { dist[v] = dist[u] + 1; prev[v] = u; q.push(v); } }
       return { dist, prev };
     }
     /* first search: long dive from far away, ends on the partner's node */
@@ -929,13 +930,17 @@
     // 시점 고정(1인칭): 여행 중 구역과 구역 사이를 이동할 때 카메라가 이동 방향을 바라보며 따라가요
     setFpv(on) { this.fpv = !!on; }
     unlock(id) { this.unlocked.add(id); }
+    block(id) { this.blocked.add(id); }
+    unblock(id) { this.blocked.delete(id); }
+    isBlocked(id) { return this.blocked.has(id); }
+    regionList() { return this.G.regions.map(g => ({ id: g.id, name: g.name, secret: !!g.secret })); }
     isOpen(id) { const g = this.G.regions.find(r => r.id === id); return !!g && (!g.secret || this.unlocked.has(id)); }
     regionAt(clientX, clientY) {
       if (!this.regionScreen) return -1;
       const rect = this.c.getBoundingClientRect(), x = (clientX - rect.left) * this.dpr, y = (clientY - rect.top) * this.dpr;
       // a region name under the pointer wins (topmost label first)
       for (let k = this.regionScreen.length - 1; k >= 0; k--) { const bx = this.regionScreen[k].box;
-        if (bx && x >= bx[0] && x <= bx[2] && y >= bx[1] && y <= bx[3]) return this.regionScreen[k].id; }
+        if (bx && x >= bx[0] && x <= bx[2] && y >= bx[1] && y <= bx[3]) return this.blocked.has(this.regionScreen[k].id) ? -3 : this.regionScreen[k].id; }
       // nodes under the pointer decide first: majority region among the nearest few within reach
       const G = this.G, reach = (70 * this.dpr) ** 2, near = [];
       for (let i = 0; i < G.n; i++) {
@@ -946,7 +951,7 @@
         near.sort((a, b) => a[0] - b[0]); const votes = {};
         near.slice(0, 12).forEach(([, rg]) => { votes[rg] = (votes[rg] || 0) + 1; });
         const win = +Object.keys(votes).sort((a, b) => votes[b] - votes[a])[0];
-        return this.isOpen(win) ? win : -2;   // -2: a secret zone that is still locked
+        return this.blocked.has(win) ? -3 : this.isOpen(win) ? win : -2;   // -2: a secret zone that is still locked · -3: 호메오스타시스 봉쇄
       }
       let best = -1, bd = Infinity;
       for (const rs of this.regionScreen) { const d = (rs.x - x) ** 2 + (rs.y - y) ** 2; if (d < bd) { bd = d; best = rs.id; } }
@@ -1285,17 +1290,18 @@
           if (on) for (const cl of rs.reg.clusters) { const h = cl.hub; if (PZ[h] > 30) { const s2 = 40 * dpr; g.globalAlpha = .7 * fade; g.drawImage(this.glow[rs.reg.col], PX[h] - s2, PY[h] - s2, s2 * 2, s2 * 2); } } }
         g.globalCompositeOperation = 'source-over'; g.textAlign = 'center';
         list.sort((a, b) => b.z - a.z);   // far labels first, near ones on top
-        for (const rs of list) { const on = rs.id === this.hover, col = PALETTE[rs.reg.col], here2 = rs.id === here;
+        for (const rs of list) { const blk = this.blocked.has(rs.id), on = !blk && rs.id === this.hover, col = blk ? '#f87171' : PALETTE[rs.reg.col], here2 = rs.id === here;
           const base = rs.reg.secret ? 22 : rs.id < OPEN_REGIONS ? 20 : 15, depth = Math.max(.75, Math.min(1.25, 5200 * DK / rs.z));
           g.globalAlpha = (on || here2 ? 1 : Math.min(.9, .35 + 3200 * DK / rs.z)) * fade;
           g.font = `${Math.round((on ? base + 6 : base) * depth * dpr)}px "Do Hyeon", sans-serif`;
-          const label = (rs.reg.secret ? '✦ ' : '') + rs.reg.name;
+          const label = (blk ? '⛔ ' : rs.reg.secret ? '✦ ' : '') + rs.reg.name;
           g.lineWidth = 5 * dpr; g.strokeStyle = 'rgba(3,4,15,.85)'; g.strokeText(label, rs.x, rs.y);
           g.fillStyle = on ? '#ffffff' : col;
-          if (rs.reg.secret) { const sh = .6 + .4 * Math.sin(now / 250); g.shadowColor = col; g.shadowBlur = 24 * dpr * sh; }
+          if (rs.reg.secret || blk) { const sh = .6 + .4 * Math.sin(now / (blk ? 160 : 250)); g.shadowColor = col; g.shadowBlur = 24 * dpr * sh; }
           g.fillText(label, rs.x, rs.y); g.shadowBlur = 0;
           { const w = g.measureText(label).width / 2 + 8 * dpr, fs = (on ? base + 6 : base) * depth * dpr; rs.box = [rs.x - w, rs.y - fs, rs.x + w, rs.y + 8 * dpr]; }
-          if (on || here2) { g.font = `${10 * dpr}px Silkscreen, monospace`; g.fillStyle = col;
+          if (blk) { g.font = `${10 * dpr}px Silkscreen, monospace`; g.fillStyle = col; g.fillText('HOMEOSTASIS · LOCKED', rs.x, rs.y + 18 * dpr); }
+          else if (on || here2) { g.font = `${10 * dpr}px Silkscreen, monospace`; g.fillStyle = col;
             g.fillText(here2 ? `${rs.reg.en} · YOU ARE HERE` : `${rs.reg.en} · ${rs.reg.nodes.length} NODES`, rs.x, rs.y + 18 * dpr); } }
       }
       g.globalAlpha = 1;

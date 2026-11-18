@@ -215,7 +215,38 @@ const pickFrom = (arr, r = Math.random) => arr[Math.floor(r() * arr.length)];
 const randInt = ([lo, hi]) => lo + Math.floor(Math.random() * (hi - lo + 1));
 const byName = (map, name) => { for (const k in map) if (name.includes(k)) return map[k]; return null; };
 const fill = (t, net, mon) => t.replace('{net}', net).replace('{mon}', mon).replace('{을}', eul(mon)).replace('{과}', wa(mon)).replace('{이}', ga(mon));
-const wildOf = net => (byName(JD.wildBy, net) || JD.wild).filter(m => m !== J.form && m !== J.dg.ko);
+// 구역마다 사는 디지몬: JD.zones 규칙(유형 · 속성 · 단계)으로 도감 전체를 구역에 나눠요
+let zoneIdx = null;
+function zoneIndex(){
+  if (zoneIdx) return zoneIdx;
+  zoneIdx = {};
+  const rules = JD.zones.map(z => ({ ...z, tre: z.type && new RegExp(z.type), nre: z.notType && new RegExp(z.notType), are: z.attr != null && new RegExp(z.attr) }));
+  for (const [n, row] of Object.entries(window.DIGI_DB || {})) {
+    if (!row[0] || /크로스워즈/.test(row[1]) || /:|X항체/.test(n)) continue;
+    const m = LEVEL_STAGE.find(([re]) => re.test(row[1])); if (!m) continue;
+    const st = m[1], type = row[2] || '', attr = row[3] || '';
+    for (const z of rules) {
+      if ((z.tre && !z.tre.test(type)) || (z.nre && z.nre.test(type)) || (z.are && !z.are.test(attr)) || (z.maxStage != null && st > z.maxStage)) continue;
+      for (const net of z.nets) { const l = zoneIdx[net] = zoneIdx[net] || []; if (!l.some(x => x.n === n)) l.push({ n, st }); }
+    }
+  }
+  return zoneIdx;
+}
+// 그 구역에서 마주치는 디지몬: 파트너 단계 ±1 (모자라면 ±2, 그래도 없으면 그 구역 전부 → 예비 목록)
+function wildOf(net){
+  const all = (zoneIndex()[net] || []).filter(x => x.n !== J.form && x.n !== J.dg.ko), p = J.stage;
+  const near = d => all.filter(x => x.st >= p - d && x.st <= p + d).map(x => x.n);
+  const list = near(1).length >= 4 ? near(1) : near(2).length >= 2 ? near(2) : all.map(x => x.n);
+  return list.length ? list : (byName(JD.wildBy, net) || JD.wild).filter(m => m !== J.form && m !== J.dg.ko);
+}
+// 디지몬이 사는 구역: 규칙에 맞는 구역 중 운명적으로 하나 (맞는 곳이 없으면 대륙 · 바다 네트워크 중 하나)
+const homeCache = new Map();
+function homeOf(name){
+  if (homeCache.has(name)) return homeCache.get(name);
+  const idx = zoneIndex(), nets = Object.keys(idx).filter(k => k !== JD.homeo.reviveAt && NET.regionId(k) >= 0 && idx[k].some(x => x.n === name));
+  const pool = nets.length ? nets : NET.regionList().filter(g => !g.secret && / 네트워크$/.test(g.name)).map(g => g.name);
+  const z = pool[hash(name) % pool.length]; homeCache.set(name, z); return z;
+}
 // 디지몬의 단계: 도감 등급으로 (유아기 -2 · 유년기 -1 · 성장기 0 · 성숙기/아머체 1 · 완전체/하이브리드체 2 · 궁극체 3)
 const LEVEL_STAGE = [[/유아기/, -2], [/유년기/, -1], [/성장기/, 0], [/성숙기|아머체/, 1], [/완전체|하이브리드체/, 2], [/궁극체/, 3]];
 const stageOfMon = name => { const lv = ((window.digiData && window.digiData(name)) || {}).level || ''; const m = LEVEL_STAGE.find(([re]) => re.test(lv)); return m ? m[1] : null; };
@@ -226,9 +257,7 @@ const bucketOf = st => {
 };
 // 사건에 나오는 상대: 'strong'이면 파트너와 같거나 높은 단계, 'weak'이면 낮은 단계에서 골라요
 function monFor(ev, mons){
-  const foe = ev && ev.foe, jg = jogPair();
-  // 조그레스할 수 있는 모습이면, 마주치는 디지몬이 그 짝일 때가 많아요 (적으로 나오는 사건은 빼고)
-  if (!foe && jg && Math.random() < JD.bond.partnerMeet) return jg.b;
+  const foe = ev && ev.foe;
   if (!foe) return pickFrom(mons);
   const p = Math.min(3, J.stage), st = m => stageOfMon(m);
   if (foe === 'strong') {
@@ -305,6 +334,8 @@ function addBond(mon, d){
   if (!mon || !d) return null;
   const before = bondOf(mon), after = Math.max(0, Math.min(JD.bond.max, before + d));
   J.bonds[mon] = after;
+  J.where[mon] = NET.regionName(NET.currentRegion()) || J.where[mon];   // 호메오스타시스가 그 구역을 리셋하면 함께 사라져요
+  if (window.digiDex) window.digiDex.reveal(mon);
   if (after === before) return null;
   const tb = bondTier(before), ta = bondTier(after);
   return { mon, d: after - before, up: after > before && ta !== tb ? ta : null, v: after };
@@ -322,10 +353,25 @@ const CAT = { choice: ['선택', '#f1f5f9'], daily: ['일상', '#334155'], local
 function savedFocus(){ try { const f = localStorage.getItem('digi-focus'); return JD.focus[f] ? f : 'free'; } catch (e) { return 'free'; } }
 function mark(cat){ if (!J.exp) return; const i = J.exp - 1; if (J.map[i] && J.map[i] !== 'daily') return; J.map[i] = cat; }
 function addCond(d){ if (!d) return 0; const b = J.cond; J.cond = Math.max(0, Math.min(100, J.cond + d)); return J.cond - b; }
+const hurt = d => d < 0 ? Math.round(d * JD.cond.hurt) : d;   // 다치는 양은 더 크게
 const condChip = c => c ? `<i class="t-cond${c < 0 ? ' neg' : ''}">컨디션 ${c > 0 ? '+' : ''}${c}</i>` : '';
 // 컨디션이 낮으면 성장이 절반
 const gainC = (fx, scale) => gain(fx, scale * (J.cond < JD.cond.low ? .5 : 1));
 const isDarkNet = net => JD.darkNets.some(k => net.includes(k));
+// 지금 마음 상태: 지쳤는지(tired), 어둠에 물들었는지(dark), 아니면 가장 강한 성향. 일상 문구와 선택지가 여기에 맞춰져요
+function mood(){
+  if (!J) return null;
+  const t = J.traits, s = statSum();
+  if (J.cond < JD.cond.low) return 'tired';
+  if (s < 40) return null;
+  const top = [...TRAITS].sort((a, b) => t[b] - t[a])[0];
+  if (top === 'dark' || t.dark >= s * .3 || (attrOf(J.form) === 'vir' && t.dark >= s * .2)) return 'dark';
+  return top;
+}
+// 그 상태에 어울리지 않는 일은 빼요 (어둠에 물들었는데 평화로운 일 · 착한 마음인데 어두운 일 · 지쳤는데 뛰어다니는 일)
+const moodOk = (e, md) => !md ? true : md === 'dark' ? !(e.peace || (e.fx && (e.fx.friend || e.fx.guard)))
+  : md === 'tired' ? !(e.fx && (e.fx.courage || e.fx.power)) : (md === 'friend' || md === 'guard') ? !(e.fx && e.fx.dark) : true;
+const fillForm = t => t.replace('{form}', J.form).replace('{이}', ga(J.form));
 const curWorld = () => J.world ? JD.worlds[J.world.i] : null;
 function rate(kind){
   const f = JD.focus[J.focus] || {}, w = curWorld();
@@ -334,23 +380,23 @@ function rate(kind){
 // 모험 방향: 걸음마다 조금씩 성장 + 컨디션 회복 (기록에는 남기지 않아요)
 function applyFocus(){
   const f = JD.focus[J.focus] || JD.focus.free, w = curWorld();
-  addCond(JD.cond.regen + (f.cond || 0) + ((w && w.regen) || 0));
+  addCond(JD.cond.regen + (f.cond || 0) - (f.drain || 0) + ((w && w.regen) || 0));
   if (!f.gain) return;
-  const t = f.trait || pickFrom(['courage', 'friend', 'wisdom', 'power']);
+  const t = f.trait || pickFrom(TRAITS.filter(k => k !== 'dark'));
   const v = Math.round((f.gain + Math.floor(Math.random() * 3)) * (J.cond < JD.cond.low ? .5 : 1));
   J.traits[t] = Math.min(JD.statMax, J.traits[t] + v);
 }
 // 저절로 일어나는 사건 하나 (위기 · 행운 · 희귀 공통)
 function simpleEvent(ev, cat, net, mon){
   const fx = gainC(ev.fx, JD.statGain.roam); addTraits(fx);
-  const c = addCond(ev.cond || 0), bd = ev.bond ? addBond(mon, ev.bond) : null;
+  const c = addCond(hurt(ev.cond || 0)), bd = ev.bond ? addBond(mon, ev.bond) : null;
   mark(cat); log(fill(ev.t, net, mon), cat, fx, null, bd, c); bondUp(bd);
 }
 // 갈림길: 사건 문장을 남기고, 그 상황에 맞는 선택지를 내밀어요
 async function forkEvent(ev, cat, region, mon){
   const f = JD.forks[ev.fork], net = region.name;
   mark(cat); log(fill(ev.t, net, mon), cat, null, null);
-  const opts = f.opts.map(o => ({ text: o.t, fx: gain(o.fx, JD.statGain.choice), cond: o.cond, mon, bond: o.bond, fork: true }));
+  const opts = f.opts.map(o => ({ text: o.t, fx: gain(o.fx, JD.statGain.choice), cond: hurt(o.cond), mon, bond: o.bond, fork: true }));
   await offerChoice(region, fill(ev.t, net, mon), opts, f.q);
 }
 // 행동이 씨앗이 되어 몇 걸음 뒤에 되돌아와요
@@ -372,12 +418,21 @@ async function stepEvent(region){
     if (c.fork) return forkEvent({ t: c.t, fork: c.fork }, 'chain', region, p.mon);
     return simpleEvent(c, 'chain', net, p.mon);
   }
-  // 조그레스 짝이 찾아와요 (조그레스할 수 있는 모습이면 다른 일보다 먼저, 자주)
-  if (jg && bondOf(jg.b) < JD.bond.jogress && r() < rate('partner')) {
-    const fx = gainC({ friend: 1 }, JD.statGain.roam); addTraits(fx);
-    const bd = addBond(jg.b, randInt(JD.bond.partnerGain));
-    mark('bond'); log(fill(pickFrom(JD.partnerVisits), net, jg.b), 'bond', fx, jg.b, bd); bondUp(bd); return;
+  // 조그레스 짝: 짝이 사는 구역에서만 만나요 (휴식 중이면 훨씬 자주)
+  if (jg && net === homeOf(jg.b) && bondOf(jg.b) < JD.bond.jogress) {
+    const rest = J.focus === 'rest', first = !bondOf(jg.b);
+    if (r() < JD.bond.zoneMeet * (rest ? JD.bond.restMeet : 1) * (first ? 1.6 : 1)) {
+      const fx = gainC({ friend: 1 }, JD.statGain.roam); addTraits(fx);
+      const bd = addBond(jg.b, randInt(rest ? JD.bond.restGain : JD.bond.zoneGain));
+      mark('bond');
+      log(first ? `✦ ${net}에서 조그레스 짝 ${jg.b}${eul(jg.b)} 찾았어요! 이 구역에 머무르며 함께 지내면 마음이 가까워져요.` : fill(pickFrom(JD.partnerVisits), net, jg.b), 'bond', fx, jg.b, bd);
+      bondUp(bd); return;
+    }
   }
+  // 호메오스타시스: 도래(미리 경고하고 다음 이동 뒤 리셋) · 정화(바로 리셋) · 이그드라실의 손길(정화를 한 번 막아요)
+  if (!J.homeo && J.exp > 15 && r() < rate('homeoWarn') && homeoWarn(region)) return;
+  if (J.exp > 20 && r() < rate('homeoPurge') && await homeoPurge(region)) return;
+  if (!J.shield && J.exp > 10 && r() < rate('ygg')) { J.shield = 1; mark('rare'); log(fill(JD.homeo.ygg, net, J.form), 'rare', null, J.form); return; }
   // 2) 세계 사건: 끝나거나, 새로 시작
   if (J.world && J.exp >= J.world.until) { const w = curWorld(); J.world = null; mark('world'); log(`🌐 ${w.end}`, 'world'); return; }
   if (!J.world && J.exp > 8 && r() < rate('world')) {
@@ -418,18 +473,82 @@ async function stepEvent(region){
     mark('bond'); log(fill(pickFrom(JD.bondVisits), net, n), 'bond', fx, n, bd); bondUp(bd); return;
   }
   // 8) 행운
-  if (r() < rate('luck')) { const ev = pickFrom(JD.lucks); return simpleEvent(ev, 'luck', net, monFor(ev, mons)); }
+  if (r() < rate('luck')) { const md = mood(), ok = JD.lucks.filter(e => moodOk(e, md)), ev = pickFrom(ok.length ? ok : JD.lucks); return simpleEvent(ev, 'luck', net, monFor(ev, mons)); }
   // 9) 지쳤을 때는 쉬어 가요
-  if (J.cond < JD.cond.low && r() < .45) { const c = addCond(12); mark('rest'); log(pickFrom(JD.rests), 'rest', null, null, null, c); return; }
+  if (J.cond < JD.cond.low && r() < .45) { const c = addCond(JD.cond.restHeal); mark('rest'); log(pickFrom(JD.rests), 'rest', null, null, null, c); return; }
   // 10) 구역 고유 사건 · 11) 평범한 하루 — 최근 기록과 같은 문장은 다시 쓰지 않아요
   const recentText = new Set(J.log.slice(-10).map(l => l.text)), recentSrc = new Set(J.log.slice(-10).map(l => l.src));
   const local = (byName(JD.events, net) || []).filter(x => !recentText.has(x) && !recentText.has(`${net}에 도착했어요. ${x}`));
   if (local.length && r() < rate('local') * 1.8) { mark('local'); log(pickFrom(local), 'local'); return; }
-  const all = JD.roam.concat(JD.roamMore || []), fresh = all.filter(e => !recentSrc.has(e)), pool = fresh.length ? fresh : all;
+  // 지금 마음 상태에 맞는 일상이 자주 일어나고, 어울리지 않는 일은 빠져요
+  const md = mood(), mine = ((md && JD.moodRoam[md]) || []).filter(e => !recentSrc.has(e));
+  const all = JD.roam.concat(JD.roamMore || []).filter(e => moodOk(e, md)), fresh = all.filter(e => !recentSrc.has(e));
+  const pool = mine.length && r() < .55 ? mine : fresh.length ? fresh : all;
   const ev = pickFrom(pool), mon = monFor(ev, mons);
   const fx = gainC(ev.fx, JD.statGain.roam); addTraits(fx);
   const bd = addBond(mon, ev.fx && ev.fx.dark ? JD.bond.roamDark : JD.bond.roam);
   mark('daily'); log(fill(ev.t, net, mon), '', fx, null, bd); J.log[J.log.length - 1].src = ev; bondUp(bd);
+}
+/* ---------- 호메오스타시스 ----------
+   도래: 다른 구역 하나를 봉쇄(들어갈 수도 지나갈 수도 없어요)하고, 다음 이동이 끝나면 그 구역을 리셋해요.
+   정화: 구역 하나를 바로 리셋해요. 지금 있는 구역이면 파트너가 삭제돼요(이그드라실의 손길이 있으면 한 번 막아요).
+   삭제된 파트너는 파일 섬에서 한 걸음 기다리면 다시 태어나요. 아니면 스피릿을 찾아 혼자 떠날 수도 있어요 */
+const zoneTxt = (t, z) => t.replace('{zone}', z);
+const homeoTargets = exclude => NET.regionList().filter(g => !g.secret && g.id !== exclude && g.name !== JD.homeo.reviveAt && g.name !== JD.horizon.region && !NET.isBlocked(g.id));
+// 리셋된 구역의 디지몬: 그 구역에서 마지막으로 만난 친구와, 그 구역에 사는 조그레스 짝은 친밀도와 함께 사라져요
+function wipeZone(name){
+  const jg = jogPair(), gone = [];
+  for (const n of Object.keys(J.bonds)) if (n !== J.form && (J.where[n] === name || (jg && n === jg.b && homeOf(n) === name))) { delete J.bonds[n]; gone.push(n); }
+  if (gone.length) J.lost = (J.lost || []).concat(gone);
+  return gone;
+}
+const goneTxt = g => g.length ? `친구였던 ${g.join(', ')}의 데이터도 함께 사라졌어요.` : '';
+function homeoWarn(region){
+  const g = pickFrom(homeoTargets(region.id)); if (!g) return false;
+  J.homeo = { id: g.id, name: g.name, at: J.moves + 1 }; NET.block(g.id);
+  mark('world'); log(zoneTxt(JD.homeo.warn, g.name), 'world'); return true;
+}
+function homeoReset(){
+  const h = J.homeo; if (!h || J.moves < h.at) return;
+  J.homeo = null; NET.unblock(h.id);
+  const gone = wipeZone(h.name);
+  log(`${zoneTxt(JD.homeo.reset, h.name)}${gone.length ? ' ' + goneTxt(gone) : ''}`, 'world');
+}
+async function homeoPurge(region){
+  const me = J, here = Math.random() < JD.homeo.hereChance, g = here ? { id: region.id, name: region.name } : pickFrom(homeoTargets(region.id));
+  if (!g) return false;
+  if (J.homeo && J.homeo.id === g.id) { NET.unblock(g.id); J.homeo = null; }
+  const gone = wipeZone(g.name);
+  mark('danger'); log(`${zoneTxt(JD.homeo.purge, g.name)}${gone.length ? ' ' + goneTxt(gone) : ''}`, 'danger');
+  if (!here) return true;
+  if (!(await sleep(2000, me))) return true;
+  if (isHumanForm()) { log(JD.homeo.human, 'sys'); return true; }
+  if (J.shield) { J.shield = 0; log(fill(JD.homeo.saved, g.name, J.form), 'rare', null, J.form); return true; }
+  if (J.human) { log(fill(JD.homeo.spiritLost, g.name, J.form), 'danger', null, null, null, addCond(-20)); toHuman('스피릿이 흩어져 다시 사람으로'); return true; }
+  const lost = J.form; J.dead = { form: lost };
+  log(fill(JD.homeo.dead, g.name, lost), 'danger', null, lost, null, addCond(-30));
+  if (!(await sleep(2200, me))) return true;
+  const z = JD.homeo.reviveAt;
+  await offerChoice(region, `${lost}${ga(lost)} 사라졌어요. 하지만 모든 디지몬이 태어나는 ${z}이라면…`, [
+    { text: `${z}${ro(z)} 가서 파트너가 다시 태어나기를 기다린다`, kind: 'wait' },
+    { text: '스피릿을 찾아 혼자 여행을 떠난다', kind: 'spirit' },
+  ], '파트너를 잃었어요. 어떻게 할까요?');
+  return true;
+}
+// 사람의 모습으로 (파트너를 잃고 스피릿을 찾아 떠나거나, 스피릿이 흩어졌을 때)
+function toHuman(path){
+  const F = JD.frontier.name;
+  Object.assign(J, { dead: null, human: true, spiritLine: null, special: null, branch: null, form: F, stage: 0, label: F, lastEvoAt: J.exp });
+  J.route.push({ form: F, stage: 0, label: F, cap: capacity(F, 0), regions: [], path });
+  renderJourney();
+}
+// 파일 섬: 삭제된 파트너가 다시 태어나기를 기다려요 (한 걸음)
+async function reviveAt(region){
+  NET.setStay(true, region.id);
+  await offerChoice(region, `모든 디지몬이 태어나는 ${region.name}이에요. ${J.dead.form}의 데이터가 이곳 어딘가에 남아 있을지도 몰라요.`, [
+    { text: '나의 파트너 디지몬이 살아나기를 기다리기', kind: 'revive' },
+    { text: '기다리지 않고 스피릿을 찾아 혼자 떠난다', kind: 'spirit' },
+  ], '파트너를 기다릴까요?');
 }
 /* ---------- 친구를 잃는 슬픔 → 타락 진화 ----------
    백신종이고, 진화 데이터에 근거가 있는 어두운 모습(같은 단계)이나 어비스의 타락 표에 오른 모습이 있을 때만 일어나요 */
@@ -477,8 +596,10 @@ function startJourney(randomFocus){
         route: [{ form: f0, stage: st0, label: lb0, cap: capacity(f0, st0), regions: [], path: human ? '파트너 없이 출발' : '시작' }],
         visited: new Set([NET.currentRegion()]), recent: [], special: null, branch: null, capsuled: false, jogressed: false, bonds: {}, jogPartner: null,
         cond: JD.cond.start, focus: savedFocus(), map: [], count: {}, choices: 0, pending: [], world: null, lastJog: -999,
+        where: {}, homeo: null, shield: 0, dead: null, stayAsk: false,
         busy: false, choosing: false, traits: Object.fromEntries(TRAITS.map(t => [t, 0])), log: [] };
-  NET.speed = 1; $('jFast').classList.remove('on');
+  NET.speed = 1; $('jFast').classList.remove('on'); NET.blocked.clear();
+  if (window.digiDex) window.digiDex.reveal(f0);
   hideCard(); hideChoice();
   netEl.classList.add('explore'); NET.setExplore(true); NET.setStay(false);
   $('journey').hidden = false;
@@ -536,7 +657,7 @@ function beginJourney(focus){
   idleStatus();
 }
 function endJourney(){
-  J = null; NET.setExplore(false); NET.setStay(false); NET.speed = 1;
+  J = null; NET.setExplore(false); NET.setStay(false); NET.speed = 1; NET.blocked.clear();
   netEl.classList.remove('explore'); $('journey').hidden = true; closeInfo(); hideChoice(); hideToast();
 }
 function idleStatus(){
@@ -564,16 +685,10 @@ function hideToast(){ clearTimeout(toastTimer); toastEl.classList.remove('in'); 
 const sleep = (ms, me) => new Promise(res => setTimeout(() => res(J === me), ms / (NET.speed || 1)));
 
 /* ---------- evolution ---------- */
-// 속성: 어둠이 가장 높거나 전체의 30% 이상이면 바이러스종. 아니면 용기+우정이 앞서면 백신종, 지혜+힘이 앞서면 데이터종을 먼저 골라요
 // 속성: 직접 정한 표(js/digi-info.js) → 성장기 파트너 데이터 → 도감 정보(js/digimon-db.js) → 프리
 const DB_ATTR = { '백신': 'vac', '데이터': 'dat', '바이러스': 'vir', '프리': 'fre', '배리어블': 'fre', '불명': 'fre', 'NO DATA': 'fre' };
 const attrOf = name => (window.DIGI_ATTR || {})[name] || ((window.DIGI.find(d => d.ko === name) || {}).attr)
   || DB_ATTR[((window.digiData && window.digiData(name)) || {}).attribute] || 'fre';
-function wantAttr(){
-  const t = J.traits, sum = statSum(), top = [...TRAITS].sort((a, b) => t[b] - t[a])[0];
-  if (t.dark > 0 && (top === 'dark' || t.dark >= sum * .3)) return 'vir';
-  return t.courage + t.friend >= t.wisdom + t.power ? 'vac' : 'dat';
-}
 // 다음 단계 후보: 정통 루트 하나이거나, 성향 계열에서 속성이 맞는 여러 후보. 진화할 때 이 중 하나가 무작위로 나와요
 // from 이 to 로 진화한다는 근거가 있는지
 // 진화 후 목록의 한 줄: [이름, 대표 1/0, 근거, (있으면) 혼자 진화 1/0, 조그레스 짝 이름[], 디지멘탈]
@@ -591,40 +706,23 @@ function nextForms(k){
     if (seen.has(n) || n === d.name || !soloEdge(d.evolvesTo.find(e => e[0] === n)) || /아머체|하이브리드체/.test(lv) || /(X항체)/.test(n) || stageOfMon(n) !== k + 1 || !window.digiImage(n)) return false;
     seen.add(n); return true; }).map(([n, main, src]) => ({ n, main: !!main, src }));
 }
-// 후보가 어느 성향에 어울리는지: 아래 branches 표에 있으면 그 성향, 아니면 도감의 유형·속성으로
-const EVO_TRAIT = [[/용|공룡|드래곤|파충류|기사|전사|무인/, 'courage'], [/천사|성령|식물|요정|새|조류|여신|천녀/, 'friend'], [/기계|사이보그|마법|마술|곤충|인형|퍼펫|안드로이드|머신/, 'wisdom'], [/짐승|수인|포유류|어인|수룡|해양|갑각|야수/, 'power']];
-function traitOfEvo(name, k){
-  const B = JD.branches[k] || {};
-  for (const t of TRAITS) if (B[t] && B[t].includes(name)) return t;
-  const d = window.digiData(name) || {};
-  if (DB_ATTR[d.attribute] === 'vir' && /마|악|언데드|고스트|타천/.test(d.type || '')) return 'dark';
-  const m = EVO_TRAIT.find(([re]) => re.test(d.type || ''));
-  return m ? m[1] : TRAITS[hash(name) % 4];
-}
+// 후보가 어느 성향에 어울리는지: 유형(천사형 → 교류 · 악마형 → 어둠 · 그 밖 → 탐구) + 속성(백신 → 수호 · 데이터 → 도전 · 바이러스 → 힘)
+const EVO_DEMON = new RegExp(JD.evoType.demon), EVO_ANGEL = new RegExp(JD.evoType.angel);
+const typeStat = n => { const ty = ((window.digiData && window.digiData(n)) || {}).type || ''; return EVO_DEMON.test(ty) ? 'dark' : EVO_ANGEL.test(ty) ? 'friend' : 'wisdom'; };
+const ATTR_STAT = { vac: 'guard', dat: 'courage', vir: 'power' };
+const attrStat = n => ATTR_STAT[attrOf(n)] || null;
+// 그 모습이 지금 성향과 얼마나 맞는지: 유형 성향 + 속성 성향 (프리는 세 속성 성향의 평균)
+function fitOf(n){ const t = J.traits, a = attrStat(n); return t[typeStat(n)] + (a ? t[a] : (t.guard + t.courage + t.power) / 3); }
 function evoCandidates(k){
   // 유아기 · 유년기: 정해진 한 줄 (유아기 → 유년기 → 파트너 성장기)
   if (k < 0) { const n = k === -2 ? J.baby[1] : J.dg.ko; return n ? [{ name: n, stage: k + 1, path: '성장', attr: k === -1 ? attrOf(n) : 'fre', baby: true }] : []; }
-  const t = J.traits, order = [...TRAITS].sort((a, b) => t[b] - t[a]), top = order[0], gap = t[top] - t[order[1]];
-  const want = wantAttr(), natural = J.dg.vibe.map(v => JD.natural[v]);
-  const balanced = gap < JD.balanceGap && top !== 'dark';
   const next = nextForms(k); if (!next.length) return [];
-  const pack = (list, path, branch) => list.map(e => ({ name: e.n, stage: k + 1, path, branch, attr: attrOf(e.n), src: e.src }));
   const lineName = J.dg.line[k] && ((window.digiData(J.dg.line[k]) || {}).name || J.dg.line[k]);
-  const std = next.filter(e => e.n === lineName);
-  const stdList = std.length ? std : next.filter(e => e.main);
-  if (!J.branch && stdList.length && top !== 'dark' && (natural.includes(top) || balanced)) {
-    const ok = stdList.filter(e => { const a = attrOf(e.n); return want === 'vir' ? a === 'vir' : (a !== 'vir' || J.dg.attr === 'vir'); });
-    if (ok.length) return pack(std.length ? ok : ok.slice(0, 3), '정통 진화');
-  }
-  const ofTop = list => { const m = list.filter(e => traitOfEvo(e.n, k) === top); return m.length ? m : list; };
-  if (want === 'vir') {
-    const v = next.filter(e => attrOf(e.n) === 'vir');
-    if (v.length) return pack(ofTop(v), `${JD.traits[top]} 계열 · 바이러스종`, top);
-  }
-  const virusOk = t.dark >= statSum() * .15;       // 어둠이 거의 없으면 바이러스종은 빼요
-  const okPool = next.filter(e => virusOk || attrOf(e.n) !== 'vir'), pool = ofTop(okPool.length ? okPool : next);
-  const best = pool.filter(e => attrOf(e.n) === want || attrOf(e.n) === 'fre');
-  return pack(best.length ? best : pool, `${JD.traits[top]} 계열 · ${ATTR[want][0]}종`, top);
+  // 원래 진화 루트와 대표 진화는 조금 더 유리해요
+  const scored = next.map(e => ({ e, s: fitOf(e.n) * (e.n === lineName ? 1.12 : e.main ? 1.04 : 1) })).sort((a, b) => b.s - a.s);
+  const best = scored[0].s, top = scored.filter(x => x.s >= best * .9 - 1).slice(0, 6);
+  return top.map(({ e }) => { const ts = typeStat(e.n), a = attrOf(e.n);
+    return { name: e.n, stage: k + 1, path: e.n === lineName ? '정통 진화' : `${JD.traitEvo[ts]} · ${ATTR[a][0]}종`, branch: ts, attr: a, src: e.src }; });
 }
 /* ---------- 스피릿 진화: 파트너를 찾지 못한 사람이 전설의 투사가 돼요 ----------
    성장기 자리(인간) → 가장 높은 성향에 맞는 휴먼 스피릿 → 비스트 스피릿 → 융합 진화 → (같은 단계에서) 통합 진화.
@@ -656,6 +754,7 @@ function applyEvolution(evo){
   if (evo.special) J.special = evo.special;
   if (evo.spirit) J.spiritLine = evo.spirit;
   J.route.push({ form: evo.name, stage: evo.stage, label: J.label, cap: evo.cap || evoCapacity(evo), regions: [], special: evo.special, path: evo.path, src: evo.src });
+  if (window.digiDex) window.digiDex.reveal(evo.name);
 }
 async function playEvolution(evo, kind = 'EVOLUTION'){
   const me = J, cap = evo.cap = evoCapacity(evo), from = J.form, baby = evo.stage < 0;
@@ -674,6 +773,7 @@ const statTop = () => Math.max(...TRAITS.map(t => J.traits[t]));
 const statSum = () => TRAITS.reduce((m, t) => m + J.traits[t], 0);
 const evoReady = need => J.exp >= need.steps && statTop() >= need.top && statSum() >= need.total;
 async function maybeEvolve(){
+  if (J.dead) return;                              // 파트너가 삭제된 동안은 진화하지 않아요
   const k = J.stage, need = !J.special && needOf(k);
   if (need && evoReady(need) && J.cond >= JD.cond.evolveMin) { const evo = decideEvolution(k); if (evo) { await playEvolution(evo, evo.kind || 'EVOLUTION'); return; } }
   if (isHumanForm()) return;                       // 사람은 스피릿을 받기 전에는 다른 진화를 하지 않아요
@@ -690,7 +790,7 @@ function armorEdges(){
     if (!t || !/아머체/.test(t.level) || seen.has(n) || !window.digiImage(n)) continue;
     const known = JD.digimentals.find(x => x.armor === n), name = e[5] || (known && known.name) || '고대';
     const def = JD.digimentals.find(x => x.name === name) || {};
-    seen.add(n); out.push({ name, trait: def.trait || traitOfEvo(n, 1), armor: n, rare: !!def.rare, src });
+    seen.add(n); out.push({ name, trait: def.trait || attrStat(n) || 'wisdom', armor: n, rare: !!def.rare, src });
   }
   return out;
 }
@@ -723,7 +823,8 @@ function lateralEvolution(){
   const t = J.traits, top = [...TRAITS].sort((a, b) => t[b] - t[a])[0], darkOk = top === 'dark' || t.dark >= statSum() * L.darkShare;
   let list = lateralForms().filter(e => e.dark ? darkOk : top !== 'dark');
   if (!list.length) return null;
-  const fit = list.filter(e => e.dark ? top === 'dark' : traitOfEvo(e.n, k) === top); if (fit.length) list = fit;
+  // 지금 성향에 가장 잘 맞는 모습 (대표 진화가 있으면 그쪽)
+  const fb = Math.max(...list.map(e => fitOf(e.n))); list = list.filter(e => fitOf(e.n) >= fb * .9 - 1);
   const mains = list.filter(e => e.main); if (mains.length) list = mains;
   const e = list[Math.floor(Math.random() * list.length)];
   const mode = baseName(e.n) === baseName((window.digiData(J.form) || {}).name || J.form);
@@ -786,7 +887,9 @@ function specialEvolution(d){
 async function travel(region){
   if (!J || J.busy || busy || !card.hidden) return;
   if (region === -2) { log('아직 신호가 닿지 않는 구역이에요.', 'sys'); return; }
+  if (region === -3) { log('호메오스타시스가 내려오고 있는 구역이라 들어갈 수 없어요.', 'sys'); return; }
   if (region < 0 || !NET.isOpen(region)) return;
+  if (J.dead && NET.regionName(region) !== JD.homeo.reviveAt) { const z = JD.homeo.reviveAt; log(`파트너가 삭제된 채예요. ${z}${ro(z)} 가서 기다려 주세요.`, 'sys'); return; }
   const me = J, secret = NET.isSecretRegion(region), finale = NET.regionName(region) === JD.horizon.region;
   const evo = secret && !finale && J.stage >= 0 && !isHumanForm() ? specialEvolution(secretDef(NET.regionName(region))) : null;
   const opts = {};
@@ -794,13 +897,14 @@ async function travel(region){
   J.busy = true; NET.hover = -1; $('journey').classList.add('busy');
   const res = await NET.travelTo(region, opts);
   if (J !== me) return;
-  if (!res) { J.busy = false; $('journey').classList.remove('busy'); return; }
+  if (!res) { J.busy = false; $('journey').classList.remove('busy'); if (NET.blocked.size) log('호메오스타시스에 길이 막혀 그 구역으로 갈 수 없어요.', 'sys'); return; }
   const name = res.region.name;
   J.moves++; J.visited.add(region);
   if (!secret) { J.recent.push(name); J.recent = J.recent.slice(-5); }
   J.route[J.route.length - 1].regions.push(name.replace(' 네트워크', ''));
   const evs = finale ? JD.horizon.arrive : byName(JD.events, name) || ['새로운 노드에 도착했어요.'];
   log(`${name}에 도착했어요. ${pickFrom(evs)}`, 'arrive');
+  homeoReset();   // 경고했던 구역은 이동이 끝나면 리셋돼요
   if (finale) {
     // 사건의 지평선: 더 돌아다니지 않고, 그 자리에서 여정을 마무리해요
     NET.setStay(true, region);
@@ -818,6 +922,7 @@ async function travel(region){
     applyEvolution(evo); if (J.exp) J.map[J.exp - 1] = 'evo';
     log(`${from}${ga(from)} ${evo.name}${ro(evo.name)} 진화했어요! (${evo.special} · ${evo.cap})`, 'evo sp', null, evo.name);
   }
+  if (J.dead) { await reviveAt(res.region); if (J !== me) return; }
   checkUnlocks();
   await roam(res.region, me);
   if (J !== me) return;
@@ -827,28 +932,43 @@ async function travel(region){
 }
 async function roam(region, me){
   NET.setStay(true, region.id);
-  const steps = randInt(JD.roamSteps);
   if (!(await sleep(JD.roamPause * .6, me))) return;
-  for (let i = 0; i < steps; i++) {
-    if (i > 0) { await NET.wander(region.id, `${region.name} 탐험 중 · ${i + 1} / ${steps}`); if (J !== me) return; }
-    J.exp++; applyFocus();
+  for (let round = 0; ; round++) {
+    const steps = randInt(JD.roamSteps);
+    for (let i = 0; i < steps; i++) {
+      if (round || i > 0) { await NET.wander(region.id, `${region.name} 탐험 중 · ${i + 1} / ${steps}`); if (J !== me) return; }
+      J.exp++; applyFocus();
+      const jg = jogPair();
+      if (jg && bondOf(jg.b) >= JD.bond.jogress && J.exp - J.lastJog >= JD.bond.jogGap) {
+        // 갈림길: 짝과 마음이 하나가 되면 조그레스를 할지 물어요 (미루면 jogGap 걸음 동안 다시 묻지 않아요)
+        J.lastJog = J.exp; mark('bond');
+        await offerChoice(region, `${jg.b}${ga(jg.b)} 곁에서 함께 빛나고 있어요.`, [
+          { text: `${jg.b}${wa(jg.b)} 힘을 합쳐 조그레스 진화한다`, fx: gain({ friend: 2 }, JD.statGain.choice), kind: 'jogress', jg },
+          { text: '아직은 지금의 모습으로 함께 여행한다', fx: gain({ friend: 1 }, JD.statGain.choice), mon: jg.b, bond: 2 },
+        ], JD.forks.jogress.q);
+      } else if (Math.random() < (!round && i === 0 ? JD.pace.choiceArrive : JD.pace.choiceRoam)) {
+        const arrived = !round && i === 0 ? [...J.log].reverse().find(l => l.cls === 'arrive') : null;
+        await offerChoice(region, arrived ? arrived.text : '');
+      } else await stepEvent(region);
+      if (J !== me) return;
+      if (J.dead) break;                           // 파트너가 삭제되면 탐험을 멈춰요
+      mark('daily');
+      await maybeEvolve(); if (J !== me) return;
+      checkUnlocks();
+      if (!(await sleep(JD.roamPause, me))) return;
+    }
+    if (J.dead) { const z = JD.homeo.reviveAt; log(`파트너 없이는 더 나아갈 수 없어요. 지도에서 ${z}${eul(z)} 눌러 찾아가 주세요.`, 'sys'); NET.setStay(false); return; }
+    // 조그레스 짝을 이 구역에서 찾았으면, 이 구역을 계속 탐험할지 물어요
     const jg = jogPair();
-    if (jg && bondOf(jg.b) >= JD.bond.jogress && J.exp - J.lastJog >= JD.bond.jogGap) {
-      // 갈림길: 짝과 마음이 하나가 되면 조그레스를 할지 물어요 (미루면 jogGap 걸음 동안 다시 묻지 않아요)
-      J.lastJog = J.exp; mark('bond');
-      await offerChoice(region, `${jg.b}${ga(jg.b)} 곁에서 함께 빛나고 있어요.`, [
-        { text: `${jg.b}${wa(jg.b)} 힘을 합쳐 조그레스 진화한다`, fx: gain({ friend: 2 }, JD.statGain.choice), kind: 'jogress', jg },
-        { text: '아직은 지금의 모습으로 함께 여행한다', fx: gain({ friend: 1 }, JD.statGain.choice), mon: jg.b, bond: 2 },
-      ], JD.forks.jogress.q);
-    } else if (Math.random() < (i === 0 ? JD.pace.choiceArrive : JD.pace.choiceRoam)) {
-      const arrived = i === 0 ? [...J.log].reverse().find(l => l.cls === 'arrive') : null;
-      await offerChoice(region, arrived ? arrived.text : '');
-    } else await stepEvent(region);
+    if (J.ended || !jg || region.name !== homeOf(jg.b) || !bondOf(jg.b) || bondOf(jg.b) >= JD.bond.jogress) break;
+    J.stayAsk = false;
+    await offerChoice(region, `조그레스 짝 ${jg.b}${ga(jg.b)} 사는 ${region.name}이에요. 함께 지낼수록 마음이 가까워져요. (친밀도 ${bondOf(jg.b)} / ${JD.bond.jogress})`, [
+      { text: `${jg.b}${wa(jg.b)} 함께 ${region.name}${eul(region.name)} 계속 탐험한다`, kind: 'stay', mon: jg.b, bond: 2 },
+      { text: '다른 구역으로 떠난다' },
+    ], `${region.name}에 더 머무를까요?`);
     if (J !== me) return;
-    mark('daily');
-    await maybeEvolve(); if (J !== me) return;
-    checkUnlocks();
-    if (!(await sleep(JD.roamPause, me))) return;
+    if (!J.stayAsk) break;
+    if (!(await sleep(JD.roamPause * .5, me))) return;
   }
   log(`${region.name} 탐험을 마쳤어요. 다음으로 갈 구역을 골라 주세요.`, 'sys');
   NET.setStay(false);
@@ -864,17 +984,21 @@ function hideChoice(){
 function buildOptions(region){
   const net = region.name, r = Math.random;
   const dark = JD.darkNets.some(k => net.includes(k)), light = JD.lightNets.some(k => net.includes(k));
-  const mons = wildOf(net);
-  // weight actions by the network's tone, then take 3 that lean different ways
+  const mons = wildOf(net), md = mood(), mt = md && md !== 'tired' ? md : null;
+  // 구역 분위기와 지금 마음 상태로 행동에 무게를 두고, 서로 다른 쪽으로 기우는 3개를 골라요
   const weighted = JD.actions.map(a => {
     let w = 1 + r();
     if (dark) w += (a.fx.dark || 0) * .8;
     if (light) w += ((a.fx.friend || 0) + (a.fx.wisdom || 0)) * .5 - (a.fx.dark || 0) * .4;
+    if (mt) w += (a.fx[mt] || 0) * 1.2;
+    if (md === 'dark') w -= ((a.fx.friend || 0) + (a.fx.guard || 0)) * .8;
+    if (md === 'friend' || md === 'guard') w -= (a.fx.dark || 0) * .8;
+    w += a.cond ? (md === 'tired' ? 5 : -2) : md === 'tired' ? -((a.fx.courage || 0) + (a.fx.power || 0)) * .5 : 0;
     return { a, w };
   }).sort((x, y) => y.w - x.w);
   const picks = [], used = new Set();
   for (const { a } of weighted) { const main = Object.keys(a.fx).sort((p, q) => a.fx[q] - a.fx[p])[0]; if (used.has(main)) continue; used.add(main); picks.push(a); if (picks.length === 3) break; }
-  return picks.map(a => { const m = monFor(a, mons); return { text: fill(a.t, net, m), fx: gainC(a.fx, JD.statGain.choice), mon: m, bond: actBond(a.fx), src: a }; });
+  return picks.map(a => { const m = monFor(a, mons); return { text: fill(a.t, net, m), fx: gainC(a.fx, JD.statGain.choice), cond: a.cond, mon: m, bond: actBond(a.fx), src: a }; });
 }
 let autoTimer = 0;
 // 자동 선택: 모험 방향과 가장 잘 맞는 선택지를 미리 골라 두고, 시간이 지나면 그걸로 정해요
@@ -882,7 +1006,7 @@ function autoPick(opts){
   const f = JD.focus[J.focus] || {}, t = f.trait;
   let best = 0, bs = -1e9;
   opts.forEach((o, i) => {
-    let sc = Math.random() * 3 + (o.kind ? 60 : 0) + (t && o.fx ? (o.fx[t] || 0) : 0) + (J.focus === 'rest' || J.cond < 45 ? (o.cond || 0) * 1.5 : 0) + (o.bond || 0) * .3;
+    let sc = Math.random() * 3 + (o.kind ? 60 : 0) + (o.kind === 'wait' || o.kind === 'revive' ? 5 : 0) + (t && o.fx ? (o.fx[t] || 0) : 0) + (J.focus === 'rest' || J.cond < 45 ? (o.cond || 0) * 1.5 : 0) + (o.bond || 0) * .3;
     if (sc > bs) { bs = sc; best = i; }
   });
   return best;
@@ -897,10 +1021,10 @@ function offerChoice(region, context = '', custom = null, question = ''){
   choiceEl.innerHTML = `
     <div class="tag">${custom ? 'TURNING POINT' : 'CHOICE'} · ${esc(region.en)}</div>
     ${context ? `<p class="c-ctx">${esc(context)}</p>` : ''}
-    <h3>${esc(question || `${region.name}에서 ${J.form}${wa(J.form)} 무엇을 할까요?`)}</h3>
+    <h3>${esc(question || (mood() && JD.moodAsk[mood()] ? fillForm(JD.moodAsk[mood()]) : `${region.name}에서 ${J.form}${wa(J.form)} 무엇을 할까요?`))}</h3>
     ${auto ? `<div class="c-auto" aria-hidden="true"><i style="animation-duration:${wait}ms"></i><span>자동 선택</span></div>` : ''}
     <div class="c-opts">${opts.map((o, i) => `<button class="c-opt${o.kind === 'bond' ? ' bondopt' : o.kind ? ' special' : ''}${auto && i === pre ? ' pre' : ''}" type="button" data-i="${i}"><span>${esc(o.text)}</span>
-      <em>${o.kind ? `<i class="${o.kind === 'bond' ? 't-bondk' : 't-special'}">${{ jogress: '조그레스 진화', capsule: '캡슐진화', bond: '조그레스 짝' }[o.kind]}</i>` : ''}${fxChips(o.fx)}${bondChip(o.mon && o.bond ? { mon: o.mon, d: Math.max(-bondOf(o.mon), Math.min(JD.bond.max - bondOf(o.mon), o.bond)) } : null)}${condChip(o.cond)}</em></button>`).join('')}</div>`;
+      <em>${o.kind ? `<i class="${o.kind === 'bond' ? 't-bondk' : 't-special'}">${{ jogress: '조그레스 진화', capsule: '캡슐진화', bond: '조그레스 짝', stay: '머무르기', wait: '파일 섬', revive: '기다리기', spirit: '스피릿' }[o.kind]}</i>` : ''}${fxChips(o.fx)}${bondChip(o.mon && o.bond ? { mon: o.mon, d: Math.max(-bondOf(o.mon), Math.min(JD.bond.max - bondOf(o.mon), o.bond)) } : null)}${condChip(o.cond)}</em></button>`).join('')}</div>`;
   choiceEl.hidden = false; requestAnimationFrame(() => choiceEl.classList.add('in'));
   return new Promise(res => {
     choiceDone = res;
@@ -922,6 +1046,19 @@ async function choose(opt){
     J.jogressed = true; J.jogPartner = opt.jg.b;
     const st = Math.max(J.stage, opt.jg.stage);
     await playEvolution({ name: opt.jg.result, stage: st, label: `${stageLabel(st)} · 조그레스`, path: `조그레스 진화 (${J.form} + ${opt.jg.b})`, partner: opt.jg.b, src: opt.jg.src || evoSrc(J.form, opt.jg.result) }, 'JOGRESS EVOLUTION');
+  } else if (opt.kind === 'stay') {
+    J.stayAsk = true;
+  } else if (opt.kind === 'wait') {
+    const z = JD.homeo.reviveAt; log(`지도에서 ${z}${eul(z)} 눌러 찾아가 주세요. 그곳에서 파트너를 기다릴 수 있어요.`, 'sys');
+  } else if (opt.kind === 'spirit') {
+    toHuman(J.dead ? '파트너를 잃고 스피릿을 찾아' : '스피릿을 찾아');
+    log('혼자서 걸어가요. 전설의 투사의 스피릿이 응답하면 직접 디지몬이 될 수 있어요.', 'sys');
+  } else if (opt.kind === 'revive') {
+    const me = J, d = J.dead;
+    log(JD.homeo.wait, 'rest');
+    if (!(await sleep(JD.roamPause, me))) return;
+    J.exp++; mark('rest'); J.dead = null; J.cond = Math.max(J.cond, 60);
+    log(fill(JD.homeo.revive, '', d.form), 'evo', null, d.form);
   } else if (opt.kind === 'capsule') {
     J.capsuled = true;
     await playEvolution({ name: opt.dm.armor, stage: 1, label: '아머체', path: `캡슐진화 · ${opt.dm.name}의 디지멘탈`, src: opt.dm.src }, 'CAPSULE EVOLUTION');
@@ -986,19 +1123,21 @@ document.addEventListener('click', e => { if (!infoEl.hidden && !infoEl.contains
 /* ---------- panel ---------- */
 function renderJourney(){
   if (!J) return;
-  $('jStage').textContent = J.label;
+  $('jStage').textContent = J.dead ? '데이터 소실' : J.label;
   $('jStage').classList.toggle('sp', !!J.special);
-  $('jName').textContent = J.form;
+  $('jName').textContent = J.dead ? `${J.form} · 삭제됨` : J.form;
   $('jPic').innerHTML = picTag(J.form, 'j-pic-img'); $('jPic').hidden = !picOf(J.form);
   $('jCap').textContent = capacity(J.form, J.stage);
   $('jMoves').textContent = `이동 ${J.moves} · ${J.exp}걸음`;
   $('jRoute').innerHTML = J.route.map((r, i) => `<li class="${r.special ? 'sp' : ''}" data-i="${i}" tabindex="0" role="button" aria-label="${esc(r.form)} 자세히 보기">${picTag(r.form, 'r-pic')}<b>${esc(r.form)}</b><small>${r.regions.length ? esc(r.regions.join('·')) : (i === J.route.length - 1 ? '지금 여기' : '—')}</small></li>`).join('');
   $('jRoute').scrollLeft = $('jRoute').scrollWidth;
-  $('jTraits').innerHTML = TRAITS.map(t => `<div class="tr t-${t}"><span>${JD.traits[t]}</span><div class="bar"><i style="width:${J.traits[t] / JD.statMax * 100}%"></i></div><b>${J.traits[t]}</b></div>`).join('');
+  $('jTraits').innerHTML = TRAITS.map(t => `<div class="tr t-${t}" title="${JD.traits[t]}이 높으면 ${JD.traitEvo[t]}으로 진화해요"><span>${JD.traits[t]}<small>${JD.traitEvo[t]}</small></span><div class="bar"><i style="width:${J.traits[t] / JD.statMax * 100}%"></i></div><b>${J.traits[t]}</b></div>`).join('');
   $('jBonds').innerHTML = bondsHTML(); fillSil($('jBonds'));
   const w = curWorld(), cl = J.cond < JD.cond.low ? 'low' : J.cond < 60 ? 'mid' : '';
   $('jStatus').innerHTML = `<div class="cond ${cl}" title="컨디션: 다치면 내려가고 걸음마다 회복해요. ${JD.cond.low} 아래면 성장이 절반, ${JD.cond.evolveMin} 아래면 진화가 미뤄져요"><span>컨디션</span><div class="bar"><i style="width:${J.cond}%"></i></div><b>${J.cond}</b></div>` +
-    (w ? `<span class="world" title="${esc(w.start)}">🌐 ${esc(w.name)} · ${Math.max(0, J.world.until - J.exp)}걸음</span>` : '');
+    (w ? `<span class="world" title="${esc(w.start)}">🌐 ${esc(w.name)} · ${Math.max(0, J.world.until - J.exp)}걸음</span>` : '') +
+    (J.homeo ? `<span class="world homeo" title="다음 이동이 끝나면 이 구역이 리셋돼요">⚠ ${esc(J.homeo.name)} 봉쇄</span>` : '') +
+    (J.shield ? '<span class="world ygg" title="호메오스타시스의 정화를 한 번 막아 줘요">✧ 이그드라실의 손길</span>' : '');
   const fc = JD.focus[J.focus] || JD.focus.free;
   $('jFocus').innerHTML = `<span class="f-h">모험 방향</span><div class="f-list">${Object.entries(JD.focus).map(([k, f]) => `<button type="button" class="f-b${k === J.focus ? ' on' : ''}" data-f="${k}" role="radio" aria-checked="${k === J.focus}" title="${esc(f.desc)}"><i aria-hidden="true">${f.icon}</i>${esc(f.name)}</button>`).join('')}</div><p class="f-desc">${esc(fc.desc)}</p>`;
   $('jLog').innerHTML = J.log.slice(-6).map(l => `<li class="${l.cls}">${esc(l.text)}${chipsOf(l.fx, l.bond, l.cond) ? ' ' + chipsOf(l.fx, l.bond, l.cond) : ''}</li>`).join('');
@@ -1026,7 +1165,7 @@ function bondsHTML(){
     const met = v > 0, ready = role === 'pair' && v >= JD.bond.jogress;
     const tag = role === 'pair' ? `<i class="b-tag${ready ? ' ready' : ''}">${ready ? '조그레스 가능!' : `조그레스 짝 · ${JD.bond.jogress} 필요`}</i>` : role === 'done' ? '<i class="b-tag done">조그레스 완료</i>' : '';
     return `<li class="${role}${ready ? ' ready' : ''}">${met ? (picTag(n, 'b-pic') || '<span class="b-pic"></span>') : silTag(n)}
-      <div class="b-main"><div class="b-top"><b>${met ? esc(n) : '???'}</b><small>${met ? bondTier(v) : '아직 만나지 못했어요'}</small>${tag}</div>
+      <div class="b-main"><div class="b-top"><b>${met ? esc(n) : '???'}</b><small>${met ? bondTier(v) : `아직 만나지 못했어요 · ${esc(homeOf(n))}에 산대요`}</small>${tag}</div>
       <div class="b-bar"${role === 'pair' ? ` style="--need:${JD.bond.jogress}%"` : ''}><i style="width:${v}%"></i></div></div><em>${v}</em></li>`;
   }).join('')}</ul>`;
 }
@@ -1074,7 +1213,7 @@ netc.addEventListener('pointermove', e => { if (J && !J.busy && card.hidden && !
 netc.addEventListener('pointerleave', () => { NET.hover = -1; });
 netc.addEventListener('click', e => { if (J && !J.busy && !NET.pinching) travel(NET.regionAt(e.clientX, e.clientY)); });
 // 개발용: 주소 끝에 #debug를 붙이면 콘솔에서 __digi.travel(구역번호)로 이동을, __digi.evolve({name, stage, label, partner}, 'JOGRESS EVOLUTION')로 진화 연출을 시험할 수 있어요
-if (location.hash === '#debug') window.__digi = { map: journeyMap, bond: (n, v) => { J.bonds[n] = v; renderJourney(); }, travel, evolve: playEvolution, candidates: k => spiritCandidates(k ?? J.stage) || evoCandidates(k ?? J.stage), lateral: () => lateralForms(), latEvo: () => lateralEvolution(), jog: () => jogPair(), armors: () => armorEdges(), special: name => specialEvolution(secretDef(name)), fallForm: () => fallForm(), loss: friend => bondLoss({ name: NET.regionName(NET.currentRegion()) || 'DEEP WEB' }, friend, fallForm()), baby: dg => babyLine(dg || J.dg), render: () => renderJourney(), net: NET, get journey(){ return J; } };
+if (location.hash === '#debug') window.__digi = { map: journeyMap, bond: (n, v) => { J.bonds[n] = v; renderJourney(); }, travel, evolve: playEvolution, candidates: k => spiritCandidates(k ?? J.stage) || evoCandidates(k ?? J.stage), lateral: () => lateralForms(), latEvo: () => lateralEvolution(), jog: () => jogPair(), armors: () => armorEdges(), special: name => specialEvolution(secretDef(name)), fallForm: () => fallForm(), loss: friend => bondLoss({ name: NET.regionName(NET.currentRegion()) || 'DEEP WEB' }, friend, fallForm()), baby: dg => babyLine(dg || J.dg), render: () => renderJourney(), net: NET, zone: net => wildOf(net), zones: () => zoneIndex(), home: n => homeOf(n), mood: () => mood(), fit: n => fitOf(n), warn: () => homeoWarn({ id: NET.currentRegion() }), purge: here => { JD.homeo.hereChance = here ? 1 : 0; return homeoPurge({ id: NET.currentRegion(), name: NET.regionName(NET.currentRegion()) }); }, step: () => stepEvent({ id: NET.currentRegion(), name: NET.regionName(NET.currentRegion()), en: '' }), get journey(){ return J; } };
 $('jEnd').addEventListener('click', () => showLog());
 $('jFocus').addEventListener('click', e => {
   const b = e.target.closest('[data-f]'); if (!b || !J || b.dataset.f === J.focus) return;
